@@ -182,3 +182,48 @@ jobs:
           name: quanshiwei-android-apk
           path: dist-android/*.apk
           if-no-files-found: warn
+
+  checksums:
+    name: SHA256SUMS
+    needs: [desktop, android]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download all release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-assets
+          # 列出该 tag 对应的 release 资源（含草稿）。
+          gh release view "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --json assets --jq '.assets[].name' > asset-names.txt || true
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            echo "Downloading $name"
+            gh release download "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --pattern "$name" \
+              --dir release-assets || true
+          done < asset-names.txt
+          ls -lh release-assets
+
+      - name: Compute SHA256SUMS.txt
+        working-directory: release-assets
+        run: |
+          if [ -z "$(ls -A . 2>/dev/null)" ]; then
+            echo "no assets found, skipping"
+            exit 0
+          fi
+          sha256sum * | sort -k2 > ../SHA256SUMS.txt
+          cat ../SHA256SUMS.txt
+
+      - name: Upload SHA256SUMS.txt to Release
+        if: hashFiles('SHA256SUMS.txt') != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
