@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "targets": ["msi", "nsis", "deb", "appimage", "dmg", "app"],
     "category": "Productivity",
     "shortDescription": "Knowledge graph notes, rebuilt in Rust + Tauri.",
@@ -93,15 +93,5 @@
       }
     }
   },
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/logseq/logseq-rs/releases/latest/download/latest.json"
-      ],
-      "pubkey": "",
-      "windows": {
-        "installMode": "passive"
-      }
-    }
-  }
+  "plugins": {}
 }
