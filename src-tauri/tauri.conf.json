@@ -29,7 +29,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": false,
-    "targets": ["msi", "nsis", "deb", "appimage", "dmg", "app"],
+    "targets": ["nsis", "deb", "appimage", "dmg", "app"],
     "category": "Productivity",
     "shortDescription": "Knowledge graph notes, rebuilt in Rust + Tauri.",
     "longDescription": "全视维是一款本地优先的知识图谱应用，支持 Markdown 与 SQLite 后端、全文搜索、白板、日志、任务和引用图谱视图。",
@@ -58,9 +58,6 @@
         "type": "embedBootstrapper"
       },
       "allowDowngrades": true,
-      "wix": {
-        "language": ["en-US", "zh-CN"]
-      },
       "nsis": {
         "installMode": "perMachine",
         "languages": ["English", "SimpChinese"],
