@@ -1,0 +1,9 @@
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "0.1.0",
+  "description": "Reference plugin showcasing the Logseq-RS plugin API.",
+  "author": "Logseq-RS",
+  "entry": "main.js",
+  "permissions": ["commands", "slashCommands", "readBlocks", "writeBlocks"]
+}

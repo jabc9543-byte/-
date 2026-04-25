@@ -1,0 +1,360 @@
+import { create } from "zustand";
+import { invoke } from "@tauri-apps/api/core";
+import { api } from "../api";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore â€?Vite worker URL import.
+import PluginWorker from "../plugins/pluginWorker.ts?worker&inline";
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  entry: string;
+  permissions: string[];
+}
+
+export interface PluginEntry {
+  manifest: PluginManifest;
+  enabled: boolean;
+  installed_at: string;
+}
+
+export interface PluginCommand {
+  pluginId: string;
+  id: string;
+  label: string;
+}
+
+export interface PluginSlashCommand {
+  pluginId: string;
+  trigger: string;
+  label: string;
+}
+
+export interface MarketplaceEntry {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  homepage: string;
+  tags: string[];
+  download_url: string;
+  sha256: string | null;
+  permissions: string[];
+}
+
+export interface MarketplaceListing {
+  source: string;
+  entries: MarketplaceEntry[];
+  fetched_at: string;
+}
+
+const REGISTRIES_KEY = "logseq-rs:marketplace-urls";
+
+function loadRegistries(): string[] {
+  try {
+    const raw = localStorage.getItem(REGISTRIES_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRegistries(urls: string[]) {
+  try {
+    localStorage.setItem(REGISTRIES_KEY, JSON.stringify(urls));
+  } catch {
+    /* ignore */
+  }
+}
+
+interface LivePlugin {
+  entry: PluginEntry;
+  worker: Worker;
+  ready: boolean;
+}
+
+interface PluginState {
+  list: PluginEntry[];
+  commands: PluginCommand[];
+  slashCommands: PluginSlashCommand[];
+  notifications: { id: number; pluginId: string; message: string }[];
+  registries: string[];
+  listings: MarketplaceListing[];
+  marketLoading: boolean;
+  marketError: string | null;
+  refresh: () => Promise<void>;
+  install: (srcDir: string) => Promise<void>;
+  uninstall: (id: string) => Promise<void>;
+  setEnabled: (id: string, enabled: boolean) => Promise<void>;
+  runCommand: (pluginId: string, commandId: string) => void;
+  runSlash: (pluginId: string, trigger: string, blockId: string) => void;
+  dispatchEvent: (name: string, payload: unknown) => void;
+  dismissNotification: (id: number) => void;
+  addRegistry: (url: string) => Promise<void>;
+  removeRegistry: (url: string) => void;
+  refreshMarketplace: () => Promise<void>;
+  installFromMarketplace: (entry: MarketplaceEntry) => Promise<void>;
+}
+
+const live = new Map<string, LivePlugin>();
+
+async function startPlugin(entry: PluginEntry): Promise<LivePlugin | null> {
+  let source: string;
+  try {
+    source = await invoke<string>("read_plugin_main", { id: entry.manifest.id });
+  } catch (e) {
+    console.error(`[plugin] failed to load ${entry.manifest.id}`, e);
+    return null;
+  }
+  const worker = new PluginWorker() as Worker;
+  const live: LivePlugin = { entry, worker, ready: false };
+  worker.addEventListener("message", (ev: MessageEvent) =>
+    handleWorkerMessage(entry, worker, ev.data),
+  );
+  worker.addEventListener("error", (ev) => {
+    console.error(`[plugin:${entry.manifest.id}] worker error`, ev.message);
+  });
+  worker.postMessage({ type: "init", source, manifest: entry.manifest });
+  return live;
+}
+
+function stopPlugin(id: string) {
+  const lp = live.get(id);
+  if (!lp) return;
+  lp.worker.terminate();
+  live.delete(id);
+  // Drop any registered commands belonging to this plugin.
+  usePluginStore.setState((s) => ({
+    commands: s.commands.filter((c) => c.pluginId !== id),
+    slashCommands: s.slashCommands.filter((c) => c.pluginId !== id),
+  }));
+}
+
+async function handleWorkerMessage(
+  entry: PluginEntry,
+  worker: Worker,
+  data: unknown,
+) {
+  if (!data || typeof data !== "object") return;
+  const msg = data as Record<string, unknown>;
+  const pluginId = entry.manifest.id;
+  const perms = new Set(entry.manifest.permissions);
+
+  if (msg.__rs_ready) {
+    const lp = live.get(pluginId);
+    if (lp) lp.ready = true;
+    return;
+  }
+  if (typeof msg.__rs_error === "string") {
+    console.error(`[plugin:${pluginId}]`, msg.__rs_error);
+    return;
+  }
+
+  if (msg.__rs_register === "command" && perms.has("commands")) {
+    const id = String(msg.id);
+    const label = String(msg.label);
+    usePluginStore.setState((s) => ({
+      commands: [
+        ...s.commands.filter((c) => !(c.pluginId === pluginId && c.id === id)),
+        { pluginId, id, label },
+      ],
+    }));
+    return;
+  }
+
+  if (msg.__rs_register === "slash" && perms.has("slashCommands")) {
+    const trigger = String(msg.trigger);
+    const label = String(msg.label);
+    usePluginStore.setState((s) => ({
+      slashCommands: [
+        ...s.slashCommands.filter(
+          (c) => !(c.pluginId === pluginId && c.trigger === trigger),
+        ),
+        { pluginId, trigger, label },
+      ],
+    }));
+    return;
+  }
+
+  if (msg.__rs_notify) {
+    const message = String(msg.message ?? "");
+    usePluginStore.setState((s) => ({
+      notifications: [
+        ...s.notifications.slice(-5),
+        { id: Date.now() + Math.random(), pluginId, message },
+      ],
+    }));
+    return;
+  }
+
+  if (msg.__rs_rpc) {
+    const id = Number(msg.id);
+    const method = String(msg.method);
+    const args = Array.isArray(msg.args) ? (msg.args as unknown[]) : [];
+    try {
+      const value = await dispatchRpc(method, args, perms);
+      worker.postMessage({ __rs_rpc: true, id, ok: true, value });
+    } catch (e) {
+      worker.postMessage({
+        __rs_rpc: true,
+        id,
+        ok: false,
+        error: String(e),
+      });
+    }
+  }
+}
+
+async function dispatchRpc(
+  method: string,
+  args: unknown[],
+  perms: Set<string>,
+): Promise<unknown> {
+  const needsRead = () => {
+    if (!perms.has("readBlocks")) throw new Error("missing permission: readBlocks");
+  };
+  const needsWrite = () => {
+    if (!perms.has("writeBlocks")) throw new Error("missing permission: writeBlocks");
+  };
+  switch (method) {
+    case "listPages":
+      needsRead();
+      return api.listPages();
+    case "getPage":
+      needsRead();
+      return api.getPage(String(args[0]));
+    case "getBlock":
+      needsRead();
+      return api.getBlock(String(args[0]));
+    case "search":
+      needsRead();
+      return api.search(String(args[0]), Number(args[1] ?? 30));
+    case "updateBlock":
+      needsWrite();
+      return api.updateBlock(String(args[0]), String(args[1]));
+    case "insertBlock":
+      needsWrite();
+      return api.insertBlock(
+        String(args[0]),
+        (args[1] as string | null) ?? null,
+        (args[2] as string | null) ?? null,
+        String(args[3]),
+      );
+    default:
+      throw new Error(`unknown rpc method: ${method}`);
+  }
+}
+
+export const usePluginStore = create<PluginState>((set, get) => ({
+  list: [],
+  commands: [],
+  slashCommands: [],
+  notifications: [],
+  registries: loadRegistries(),
+  listings: [],
+  marketLoading: false,
+  marketError: null,
+
+  refresh: async () => {
+    const list = await invoke<PluginEntry[]>("list_plugins");
+    set({ list });
+    // Reconcile live workers.
+    const wanted = new Set(list.filter((e) => e.enabled).map((e) => e.manifest.id));
+    for (const id of Array.from(live.keys())) {
+      if (!wanted.has(id)) stopPlugin(id);
+    }
+    for (const entry of list) {
+      if (!entry.enabled) continue;
+      if (live.has(entry.manifest.id)) continue;
+      const lp = await startPlugin(entry);
+      if (lp) live.set(entry.manifest.id, lp);
+    }
+  },
+
+  install: async (srcDir) => {
+    await invoke<PluginEntry>("install_plugin", { srcDir });
+    await get().refresh();
+  },
+
+  uninstall: async (id) => {
+    stopPlugin(id);
+    await invoke<void>("uninstall_plugin", { id });
+    await get().refresh();
+  },
+
+  setEnabled: async (id, enabled) => {
+    await invoke<PluginEntry>("set_plugin_enabled", { id, enabled });
+    await get().refresh();
+  },
+
+  runCommand: (pluginId, commandId) => {
+    const lp = live.get(pluginId);
+    if (!lp || !lp.ready) return;
+    lp.worker.postMessage({ __rs_invoke: "command", commandId });
+  },
+
+  runSlash: (pluginId, trigger, blockId) => {
+    const lp = live.get(pluginId);
+    if (!lp || !lp.ready) return;
+    lp.worker.postMessage({ __rs_invoke: "slash", trigger, blockId });
+  },
+
+  dispatchEvent: (name, payload) => {
+    for (const lp of live.values()) {
+      lp.worker.postMessage({ __rs_event: true, name, payload });
+    }
+  },
+
+  dismissNotification: (id) => {
+    set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) }));
+  },
+
+  addRegistry: async (url) => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const next = Array.from(new Set([...get().registries, trimmed]));
+    saveRegistries(next);
+    set({ registries: next });
+    await get().refreshMarketplace();
+  },
+
+  removeRegistry: (url) => {
+    const next = get().registries.filter((u) => u !== url);
+    saveRegistries(next);
+    set({
+      registries: next,
+      listings: get().listings.filter((l) => l.source !== url),
+    });
+  },
+
+  refreshMarketplace: async () => {
+    const urls = get().registries;
+    if (urls.length === 0) {
+      set({ listings: [], marketError: null });
+      return;
+    }
+    set({ marketLoading: true, marketError: null });
+    const listings: MarketplaceListing[] = [];
+    let firstErr: string | null = null;
+    for (const url of urls) {
+      try {
+        const listing = await invoke<MarketplaceListing>("fetch_marketplace", { url });
+        listings.push(listing);
+      } catch (e) {
+        if (!firstErr) firstErr = `${url}: ${String(e)}`;
+      }
+    }
+    set({ listings, marketLoading: false, marketError: firstErr });
+  },
+
+  installFromMarketplace: async (entry) => {
+    await invoke<PluginEntry>("install_plugin_from_url", { entry });
+    await get().refresh();
+  },
+}));

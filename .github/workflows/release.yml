@@ -1,0 +1,184 @@
+name: Release
+
+# 全视维 跨平台发布工作流。
+# 推送 v* 标签时触发，在 Windows / Linux / macOS 上打包桌面版，
+# 并尝试在 Ubuntu 上构建 Android APK。所有产物上传到对应 Release。
+#
+# 必需 secrets（可选，用于自动更新器签名）：
+#   TAURI_SIGNING_PRIVATE_KEY
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+# Android 签名（可选，缺省时 APK 为 debug 签名）：
+#   ANDROID_KEY_BASE64         — base64(keystore.jks)
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+#   ANDROID_KEYSTORE_PASSWORD
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: 桌面 (${{ matrix.settings.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+    runs-on: ${{ matrix.settings.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ contains(matrix.settings.args, 'aarch64-apple-darwin') && 'aarch64-apple-darwin' || contains(matrix.settings.args, 'x86_64-apple-darwin') && 'x86_64-apple-darwin' || '' }}
+
+      - name: Cache cargo registry & build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux build deps
+        if: matrix.settings.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            patchelf
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build Tauri app (sign + bundle)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "全视维 ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.settings.args }}
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;26.1.10909125" "platforms;android-34" "build-tools;34.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
+
+      - name: Install Rust toolchain with Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: "aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android"
+
+      - name: Cache cargo registry & build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli@latest
+
+      - name: Initialize Android project
+        run: npx tauri android init
+
+      - name: Decode signing key (optional)
+        env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEY_BASE64" ]; then
+            echo "No Android signing key provided; APK will be debug-signed."
+            exit 0
+          fi
+          mkdir -p src-tauri/gen/android
+          echo "$ANDROID_KEY_BASE64" | base64 -d > src-tauri/gen/android/keystore.jks
+          cat > src-tauri/gen/android/keystore.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=keystore.jks
+          EOF
+
+      - name: Build Android APK
+        env:
+          NDK_HOME: ${{ env.NDK_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: npx tauri android build --apk
+
+      - name: Collect APK artifacts
+        run: |
+          mkdir -p dist-android
+          find src-tauri/gen/android -name "*.apk" -exec cp {} dist-android/ \;
+          ls -lh dist-android || true
+
+      - name: Upload APK to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "全视维 ${{ github.ref_name }}"
+          draft: true
+          files: dist-android/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quanshiwei-android-apk
+          path: dist-android/*.apk
+          if-no-files-found: warn

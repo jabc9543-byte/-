@@ -1,0 +1,27 @@
+node_modules
+dist
+dist-ssr
+dist-release
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.log
+# Rust
+src-tauri/target
+# Build logs / temp
+build-windows.log
+src-tauri/cargo_output.txt
+src-tauri/err.txt
+src-tauri/log.txt
+src-tauri/out.txt
+src-tauri/output.txt
+# Tauri mobile generated
+src-tauri/gen/android
+src-tauri/gen/apple
+# TS build cache
+*.tsbuildinfo
+# Stale tsc emit shadowing .ts/.tsx sources
+src/**/*.js
+src/**/*.js.map
+!src/**/*.config.js
