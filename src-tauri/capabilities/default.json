@@ -11,7 +11,6 @@
     "fs:allow-write-text-file",
     "fs:allow-read-dir",
     "fs:allow-exists",
-    "fs:allow-mkdir",
-    "updater:default"
+    "fs:allow-mkdir"
   ]
 }
