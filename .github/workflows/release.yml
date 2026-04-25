@@ -89,10 +89,17 @@ jobs:
 
             ## 各平台首次启动说明（重要，请先看）
 
-            ### Windows（`*-setup.exe`）
-            - 双击 `*-setup.exe`，SmartScreen 可能提示"未识别的应用" → 点 **更多信息 → 仍要运行**。
-            - 安装时如缺少 WebView2，安装器会自动联网下载安装（约 100MB），请保持联网。
-            - 安装完成后从开始菜单启动「Quanshiwei」即可。
+            ### Windows
+            **方式一：免安装绿色版（推荐）**
+            - 下载 `Quanshiwei_0.1.0_x64_portable.zip`，**右键 → 属性 → 勾选"解除锁定"→ 确定**，再解压。
+            - 双击解压目录里的 `Quanshiwei.exe` 即可运行，无需安装、无需管理员权限。
+            - 首次运行如缺少 WebView2，会弹窗提示去微软官网下载（约 100MB）。
+
+            **方式二：安装版**
+            - 下载 `Quanshiwei_0.1.0_x64-setup.exe`，**右键 → 属性 → 勾选"解除锁定"→ 确定**。
+            - SmartScreen 提示"未识别的应用" → 点 **更多信息 → 仍要运行**。
+            - 当前为"仅当前用户"安装，无需管理员权限，装到 `%LocalAppData%\Programs\Quanshiwei`。
+            - 安装后从开始菜单启动「Quanshiwei」。
 
             ### macOS（`*.dmg`）
             - 首次打开会提示"已损坏，无法打开" —— 这是 Apple Gatekeeper 对未签名应用的拦截，**不是真的损坏**。
@@ -125,6 +132,31 @@ jobs:
             ## 校验
             下载 `SHA256SUMS.txt` 后用 `sha256sum -c SHA256SUMS.txt`（Linux/macOS）或 `Get-FileHash`（Windows）验证完整性。
           args: ${{ matrix.settings.args }}
+
+      - name: Package Windows portable zip
+        if: matrix.settings.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $exe = "src-tauri/target/release/Quanshiwei.exe"
+          if (-not (Test-Path $exe)) { $exe = (Get-ChildItem -Path src-tauri/target/release -Filter *.exe -File | Where-Object { $_.Name -notmatch 'setup|deps|build_script' } | Select-Object -First 1).FullName }
+          if (-not $exe) { Write-Error "exe not found"; exit 1 }
+          $stage = "dist-portable/Quanshiwei_0.1.0_x64_portable"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item $exe "$stage/Quanshiwei.exe" -Force
+          if (Test-Path src-tauri/target/release/resources) { Copy-Item src-tauri/target/release/resources $stage -Recurse -Force }
+          Set-Content -Path "$stage/README.txt" -Encoding UTF8 -Value "Quanshiwei 0.1.0 Portable`r`n`r`n直接双击 Quanshiwei.exe 启动。`r`n如提示缺少 WebView2，请先安装：`r`nhttps://developer.microsoft.com/microsoft-edge/webview2/"
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist-portable/Quanshiwei_0.1.0_x64_portable.zip" -Force
+          Get-ChildItem dist-portable
+
+      - name: Upload portable zip to Release
+        if: matrix.settings.platform == 'windows-latest' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: dist-portable/Quanshiwei_0.1.0_x64_portable.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   android:
     name: Android APK
