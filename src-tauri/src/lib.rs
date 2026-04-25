@@ -39,6 +39,7 @@ pub fn run() {
             commands::graph::list_graphs,
             commands::graph::graph_stats,
             commands::graph::reload_graph,
+            commands::graph::default_graph_dir,
             commands::page::list_pages,
             commands::page::get_page,
             commands::page::create_page,

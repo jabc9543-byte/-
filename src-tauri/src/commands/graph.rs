@@ -2,11 +2,24 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::model::GraphMeta;
 use crate::state::AppState;
+
+/// 在应用私有数据目录下创建并返回默认 Markdown 工作区路径。
+/// 用于移动端（Android/iOS）等无法选择任意文件夹的场景。
+#[tauri::command]
+pub async fn default_graph_dir(app: AppHandle) -> AppResult<String> {
+    let base = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| AppError::Other(format!("resolve app_local_data_dir failed: {e}")))?;
+    let dir = base.join("graph");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir.to_string_lossy().to_string())
+}
 
 #[tauri::command]
 pub async fn open_graph(

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { appLocalDataDir, join } from "@tauri-apps/api/path";
-import { mkdir, exists } from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
 import { useGraphStore } from "../stores/graph";
 
 export function OpenGraphGate() {
@@ -47,11 +46,7 @@ export function OpenGraphGate() {
     setError(null);
     setBusy(true);
     try {
-      const base = await appLocalDataDir();
-      const dir = await join(base, "graph");
-      if (!(await exists(dir))) {
-        await mkdir(dir, { recursive: true });
-      }
+      const dir = await invoke<string>("default_graph_dir");
       await openGraph(dir);
     } catch (e) {
       setError(`创建默认工作区失败：${String(e)}`);
