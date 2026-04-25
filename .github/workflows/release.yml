@@ -84,6 +84,46 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
+          releaseBody: |
+            # 全视维 ${{ github.ref_name }}
+
+            ## 各平台首次启动说明（重要，请先看）
+
+            ### Windows（`*-setup.exe`）
+            - 双击 `*-setup.exe`，SmartScreen 可能提示"未识别的应用" → 点 **更多信息 → 仍要运行**。
+            - 安装时如缺少 WebView2，安装器会自动联网下载安装（约 100MB），请保持联网。
+            - 安装完成后从开始菜单启动「Quanshiwei」即可。
+
+            ### macOS（`*.dmg`）
+            - 首次打开会提示"已损坏，无法打开" —— 这是 Apple Gatekeeper 对未签名应用的拦截，**不是真的损坏**。
+            - 解决方案：终端执行
+              ```bash
+              xattr -cr /Applications/Quanshiwei.app
+              ```
+              再从启动台打开即可。
+
+            ### Linux
+            - **AppImage** 方式：
+              ```bash
+              chmod +x Quanshiwei_*_amd64.AppImage
+              # Ubuntu 22.04+ 需先装 fuse2：
+              sudo apt install libfuse2
+              ./Quanshiwei_*_amd64.AppImage
+              ```
+            - **deb** 方式：
+              ```bash
+              sudo apt install ./Quanshiwei_*_amd64.deb
+              # 启动：
+              quanshiwei
+              ```
+              依赖 `libwebkit2gtk-4.1-0`，apt 会自动装。
+
+            ### Android（`app-universal-*.apk`）
+            - 当前为 **debug 签名**（无 Play 商店发布密钥），需要在系统设置允许"未知来源"才能安装。
+            - 路径：设置 → 应用 → 特殊应用访问 → 安装未知应用 → 允许文件管理器/浏览器。
+
+            ## 校验
+            下载 `SHA256SUMS.txt` 后用 `sha256sum -c SHA256SUMS.txt`（Linux/macOS）或 `Get-FileHash`（Windows）验证完整性。
           args: ${{ matrix.settings.args }}
 
   android:
@@ -157,7 +197,14 @@ jobs:
         env:
           NDK_HOME: ${{ env.NDK_HOME }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-        run: npx tauri android build --apk
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEY_BASE64" ]; then
+            echo "No keystore configured — building DEBUG-signed APK so it can be installed."
+            npx tauri android build --apk --debug
+          else
+            npx tauri android build --apk
+          fi
 
       - name: Collect APK artifacts
         run: |
