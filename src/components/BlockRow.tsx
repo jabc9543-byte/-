@@ -305,7 +305,7 @@ export function BlockRow({ block }: Props) {
             <textarea
               ref={ref}
               className={`block-editor${closed ? " block-editor-closed" : ""}${focused ? " is-focused" : " is-blurred"}`}
-              rows={1}
+              rows={isTouch ? 2 : 1}
               value={value}
               onChange={(e) => {
                 const next = e.target.value;

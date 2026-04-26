@@ -2954,12 +2954,26 @@ input, textarea { font-family: inherit; color: inherit; }
   color: inherit !important;
   caret-color: auto !important;
 }
-/* Make the textarea hit-area generous and let the system handle scroll
-   without blocking IME on touch. */
+/* On Android the textarea was effectively invisible (transparent bg, no
+   border, height shrinking via field-sizing) so users had nothing to tap.
+   Restore an obvious tappable surface and disable field-sizing here — JS
+   no longer drives autoresize on every keystroke either. */
 .app-mobile .block-editor {
+  field-sizing: fixed;
   touch-action: manipulation;
-  min-height: 32px;
-  padding: 6px 4px;
+  min-height: 44px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  pointer-events: auto;
+}
+.app-mobile .block-editor:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+.app-mobile .block-editor-stack {
+  min-height: 44px;
 }
 /* Disable the drag handle on touch — it competed with tap-to-focus and
    on some Android WebViews caused the keyboard to dismiss as the system
@@ -2967,6 +2981,8 @@ input, textarea { font-family: inherit; color: inherit; }
 .app-mobile .block-bullet {
   -webkit-user-drag: none;
   touch-action: manipulation;
+  /* Smaller bullet so the editor gets all the tap area. */
+  flex: 0 0 16px;
 }
 
 /* Comments panel on mobile: full-width, respect status-bar safe area,
@@ -2979,6 +2995,7 @@ input, textarea { font-family: inherit; color: inherit; }
 }
 .app-mobile .comments-panel-header {
   padding: 10px 12px;
+  gap: 12px;
 }
 .app-mobile .comments-panel-header .comment-icon-btn {
   width: 44px;
@@ -2987,6 +3004,25 @@ input, textarea { font-family: inherit; color: inherit; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+.comments-panel-back-btn {
+  display: none;
+}
+.app-mobile .comments-panel-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 0 0 auto;
 }
 .comments-panel-backdrop {
   display: none;

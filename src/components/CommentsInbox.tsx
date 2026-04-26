@@ -37,6 +37,14 @@ export function CommentsInbox() {
       />
       <aside className="comments-inbox" aria-label="评论收件箱">
       <header className="comments-panel-header">
+        <button
+          type="button"
+          className="comments-panel-back-btn"
+          onClick={toggleInbox}
+          aria-label="返回"
+        >
+          ← 返回
+        </button>
         <h3>待处理评论（{open.length}）</h3>
         <button
           className="comment-icon-btn"

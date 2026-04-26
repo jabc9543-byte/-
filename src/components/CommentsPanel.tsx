@@ -182,6 +182,14 @@ export function CommentsPanel() {
       />
       <aside className="comments-panel" aria-label="块评论">
       <header className="comments-panel-header">
+        <button
+          type="button"
+          className="comments-panel-back-btn"
+          onClick={close}
+          aria-label="返回"
+        >
+          ← 返回
+        </button>
         <h3>评论</h3>
         <button
           className="comment-icon-btn"
