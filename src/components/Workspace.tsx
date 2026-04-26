@@ -20,6 +20,7 @@ import { CommentsPanel } from "./CommentsPanel";
 import { CommentsInbox } from "./CommentsInbox";
 import { AiPanel } from "./AiPanel";
 import { HelpPanel } from "./HelpPanel";
+import { MobileDebugPanel } from "./MobileDebugPanel";
 import { usePageStore } from "../stores/page";
 import { useWhiteboardStore } from "../stores/whiteboard";
 import { usePluginStore } from "../stores/plugins";
@@ -34,6 +35,7 @@ import { useCommentsStore } from "../stores/comments";
 import { useBackupStore } from "../stores/backup";
 import { useAiStore } from "../stores/ai";
 import { useHelpStore } from "../stores/help";
+import { logMobileDebug } from "../utils/mobileDebug";
 
 export function Workspace() {
   const refresh = usePageStore((s) => s.refreshPages);
@@ -204,6 +206,77 @@ export function Workspace() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+
+    logMobileDebug("workspace", "mobile debug active", {
+      activeId,
+      view: view.kind,
+    });
+
+    const describeTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return String(target);
+      return {
+        tag: target.tagName,
+        cls: target.className,
+        role: target.getAttribute("role"),
+      };
+    };
+
+    const onFocusIn = (event: FocusEvent) => {
+      logMobileDebug("focusin", "target", describeTarget(event.target));
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      logMobileDebug("focusout", "target", describeTarget(event.target));
+    };
+    const onSelection = () => {
+      const active = document.activeElement as HTMLElement | null;
+      logMobileDebug("selection", "activeElement", active ? {
+        tag: active.tagName,
+        cls: active.className,
+      } : "null");
+    };
+    const onError = (event: ErrorEvent) => {
+      logMobileDebug("window.error", event.message, {
+        file: event.filename,
+        line: event.lineno,
+        col: event.colno,
+      });
+    };
+    const onReject = (event: PromiseRejectionEvent) => {
+      logMobileDebug("unhandledrejection", "reason", String(event.reason));
+    };
+
+    document.addEventListener("focusin", onFocusIn, true);
+    document.addEventListener("focusout", onFocusOut, true);
+    document.addEventListener("selectionchange", onSelection, true);
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onReject);
+
+    const viewport = window.visualViewport;
+    const onViewport = () => {
+      if (!viewport) return;
+      logMobileDebug("viewport", "changed", {
+        width: Math.round(viewport.width),
+        height: Math.round(viewport.height),
+        scale: viewport.scale,
+        top: Math.round(viewport.offsetTop),
+      });
+    };
+    viewport?.addEventListener("resize", onViewport);
+    viewport?.addEventListener("scroll", onViewport);
+
+    return () => {
+      document.removeEventListener("focusin", onFocusIn, true);
+      document.removeEventListener("focusout", onFocusOut, true);
+      document.removeEventListener("selectionchange", onSelection, true);
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onReject);
+      viewport?.removeEventListener("resize", onViewport);
+      viewport?.removeEventListener("scroll", onViewport);
+    };
+  }, [isMobile, activeId, view.kind]);
 
   // --- Global keymap bindings (module 16) --------------------------------
   // Registered here so the dispatcher can call them. Defaults mirror the
@@ -443,6 +516,7 @@ export function Workspace() {
           }}
         />
       )}
+      {isMobile && <MobileDebugPanel />}
       <CollabPresence />
       <CommentsInboxToggle />
       {palette && <CommandPalette onClose={() => setPalette(false)} />}

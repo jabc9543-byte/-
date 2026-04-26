@@ -872,6 +872,71 @@ input, textarea { font-family: inherit; color: inherit; }
 .plugin-toast { pointer-events: auto; cursor: pointer; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); min-width: 220px; max-width: 340px; }
 .plugin-toast-from { display: block; font-size: 11px; color: var(--fg-muted); margin-bottom: 2px; }
 .plugin-toast-msg { display: block; font-size: 13px; }
+
+.mobile-debug-toggle {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 210;
+  border: 1px solid var(--border);
+  background: #111;
+  color: #fff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+}
+.mobile-debug-sheet {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: 64px;
+  z-index: 211;
+  max-height: min(60vh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+}
+.mobile-debug-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.mobile-debug-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-debug-actions button {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: inherit;
+}
+.mobile-debug-help {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--border);
+}
+.mobile-debug-log {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+}
 /* --- Settings modal --- */
 .settings-modal {
   width: min(560px, 92vw); max-height: 80vh; overflow-y: auto;

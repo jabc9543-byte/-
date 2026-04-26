@@ -11,6 +11,7 @@ import { QueryEmbed } from "./QueryEmbed";
 import { BlockEmbed } from "./BlockEmbed";
 import { TaskMarkerPill } from "./TaskMarkerPill";
 import { InlineRefs } from "./InlineRefs";
+import { logMobileDebug } from "../utils/mobileDebug";
 
 interface Props {
   block: Block;
@@ -79,13 +80,29 @@ function BlockRowImpl({ block }: Props) {
     // Don't clobber in-progress edits while the textarea is focused —
     // backend reload / file-watcher fires can otherwise reset the value
     // mid-typing, which on Android dismisses the soft keyboard.
-    if (focusedRef.current) return;
+    if (focusedRef.current) {
+      if (isTouch) {
+        logMobileDebug("block.content", "skip external sync while focused", {
+          blockId: block.id,
+          incomingLength: block.content.length,
+        });
+      }
+      return;
+    }
     setValue(block.content);
     // Keep DOM in sync (the textarea is uncontrolled — see below).
     if (ref.current && ref.current.value !== block.content) {
       ref.current.value = block.content;
     }
-  }, [block.content]);
+  }, [block.content, block.id, isTouch]);
+
+  useEffect(() => {
+    if (!isTouch) return;
+    logMobileDebug("block.mount", "mounted", { blockId: block.id });
+    return () => {
+      logMobileDebug("block.unmount", "unmounted", { blockId: block.id });
+    };
+  }, [block.id, isTouch]);
 
   // Lazy-load comment counts for this block so the badge appears. The
   // store caches by block id so repeat mounts are cheap.
@@ -117,6 +134,12 @@ function BlockRowImpl({ block }: Props) {
       const next = ytext.toString();
       const el = ref.current;
       applyingRemote.current = true;
+      if (isTouch) {
+        logMobileDebug("collab.remote", "apply ytext change", {
+          blockId: block.id,
+          nextLength: next.length,
+        });
+      }
       if (el && document.activeElement === el) {
         const start = el.selectionStart;
         const end = el.selectionEnd;
@@ -141,7 +164,7 @@ function BlockRowImpl({ block }: Props) {
       ytextRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collabActive, block.id]);
+  }, [collabActive, block.id, block.content, getOrCreateText, isTouch, value]);
 
   // Push local edits into the Y.Text (diff-based minimal replace).
   const syncToY = (next: string) => {
@@ -179,6 +202,13 @@ function BlockRowImpl({ block }: Props) {
   };
 
   const onBlur = async () => {
+    if (isTouch) {
+      logMobileDebug("blur", "persist block", {
+        blockId: block.id,
+        valueLength: value.length,
+        contentLength: block.content.length,
+      });
+    }
     if (value !== block.content) await update(block.id, value);
   };
 
@@ -200,6 +230,13 @@ function BlockRowImpl({ block }: Props) {
   };
 
   const onKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isTouch) {
+      logMobileDebug("keydown", e.key, {
+        blockId: block.id,
+        composing: (e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229,
+        valueLength: value.length,
+      });
+    }
     // Don't intercept keys while an IME is composing (Chinese/Japanese
     // input methods send key=Enter etc. to confirm a candidate). Doing
     // preventDefault here on Android tears down the editor mid-compose
@@ -335,12 +372,25 @@ function BlockRowImpl({ block }: Props) {
               className={`block-editor${closed ? " block-editor-closed" : ""}${focused ? " is-focused" : " is-blurred"}${isTouch ? " is-touch" : ""}`}
               rows={isTouch ? 3 : 1}
               defaultValue={block.content}
+              onPointerDownCapture={() => {
+                if (!isTouch) return;
+                logMobileDebug("pointerdown", "textarea pointerdown", { blockId: block.id });
+              }}
               onCompositionStart={() => {
                 composingRef.current = true;
+                if (isTouch) {
+                  logMobileDebug("compositionstart", "start", { blockId: block.id });
+                }
               }}
               onCompositionEnd={(e) => {
                 composingRef.current = false;
                 const next = (e.target as HTMLTextAreaElement).value;
+                if (isTouch) {
+                  logMobileDebug("compositionend", "end", {
+                    blockId: block.id,
+                    nextLength: next.length,
+                  });
+                }
                 setValue(next);
                 if (collabActive) syncToY(next);
               }}
@@ -350,10 +400,24 @@ function BlockRowImpl({ block }: Props) {
                 // unchallenged. We'll sync the final value on
                 // compositionend.
                 if (composingRef.current) return;
+                if (isTouch) {
+                  logMobileDebug("change", "textarea change", {
+                    blockId: block.id,
+                    nextLength: next.length,
+                  });
+                }
                 setValue(next);
                 if (collabActive) syncToY(next);
               }}
               onBlur={() => {
+                if (isTouch) {
+                  logMobileDebug("textarea.blur", "blur", {
+                    blockId: block.id,
+                    activeTag: document.activeElement instanceof HTMLElement
+                      ? document.activeElement.tagName
+                      : "null",
+                  });
+                }
                 setFocused(false);
                 focusedRef.current = false;
                 autoresizeOnBlur();
@@ -363,6 +427,12 @@ function BlockRowImpl({ block }: Props) {
                 }
               }}
               onFocus={() => {
+                if (isTouch) {
+                  logMobileDebug("textarea.focus", "focus", {
+                    blockId: block.id,
+                    valueLength: ref.current?.value.length ?? value.length,
+                  });
+                }
                 setFocused(true);
                 focusedRef.current = true;
                 if (!collabActive) return;
