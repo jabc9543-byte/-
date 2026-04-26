@@ -2959,6 +2959,16 @@ input, textarea { font-family: inherit; color: inherit; }
    that on Android races with the soft keyboard appearing and causes it
    to flicker / dismiss. Users edit raw markdown on mobile. */
 .app-mobile .block-preview { display: none !important; }
+/* Use the dynamic viewport height so the soft keyboard shrinks the layout
+   instead of being painted over the input area. With `100vh` and an
+   overflow:hidden ancestor, Android can't scroll the focused field into
+   view and decides to dismiss the IME. `100dvh` plus `overflow:auto`
+   on the root flex container fixes this. */
+.app-mobile {
+  height: 100dvh !important;
+  min-height: 100dvh;
+  overflow: auto !important;
+}
 /* On Android the textarea was effectively invisible (transparent bg, no
    border, height shrinking via field-sizing) so users had nothing to tap.
    Restore an obvious tappable surface and disable field-sizing here — JS

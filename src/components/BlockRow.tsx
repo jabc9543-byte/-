@@ -51,6 +51,11 @@ export function BlockRow({ block }: Props) {
   const [dropPos, setDropPos] = useState<DropPos>(null);
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
+  // Track IME composition. React's controlled <textarea> rewrites the
+  // DOM value on each onChange, which on Android breaks an in-flight
+  // composition and dismisses the soft keyboard. Suspend setValue while
+  // composing and reconcile on compositionend.
+  const composingRef = useRef(false);
 
   // --- Collaborative editing binding ---
   const collabStatus = useCollabStore((s) => s.status);
@@ -182,6 +187,14 @@ export function BlockRow({ block }: Props) {
   };
 
   const onKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Don't intercept keys while an IME is composing (Chinese/Japanese
+    // input methods send key=Enter etc. to confirm a candidate). Doing
+    // preventDefault here on Android tears down the editor mid-compose
+    // and the soft keyboard dismisses.
+    // React types don't always include isComposing; read off nativeEvent.
+    if ((e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229) {
+      return;
+    }
     const mod = e.metaKey || e.ctrlKey;
     if (e.key === "Enter" && !e.shiftKey && !mod) {
       e.preventDefault();
@@ -287,14 +300,14 @@ export function BlockRow({ block }: Props) {
     <div
       ref={rowRef}
       className={`block-row${dropCls}`}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
+      onDragOver={isTouch ? undefined : onDragOver}
+      onDragLeave={isTouch ? undefined : onDragLeave}
+      onDrop={isTouch ? undefined : onDrop}
     >
       <div
         className="block-bullet"
         draggable={!isTouch}
-        onDragStart={onDragStart}
+        onDragStart={isTouch ? undefined : onDragStart}
         title="拖动以重新排序"
         aria-label="拖拽手柄"
       />
@@ -307,8 +320,21 @@ export function BlockRow({ block }: Props) {
               className={`block-editor${closed ? " block-editor-closed" : ""}${focused ? " is-focused" : " is-blurred"}`}
               rows={isTouch ? 2 : 1}
               value={value}
+              onCompositionStart={() => {
+                composingRef.current = true;
+              }}
+              onCompositionEnd={(e) => {
+                composingRef.current = false;
+                const next = (e.target as HTMLTextAreaElement).value;
+                setValue(next);
+                if (collabActive) syncToY(next);
+              }}
               onChange={(e) => {
                 const next = e.target.value;
+                // While composing, let the browser show the IME preview
+                // unchallenged. We'll sync the final value on
+                // compositionend.
+                if (composingRef.current) return;
                 setValue(next);
                 if (collabActive) syncToY(next);
               }}
@@ -349,6 +375,10 @@ export function BlockRow({ block }: Props) {
               autoCorrect="off"
               autoComplete="off"
               inputMode="text"
+              enterKeyHint="enter"
+              data-gramm="false"
+              data-gramm_editor="false"
+              data-enable-grammarly="false"
             />
             {!isTouch && !focused && value.trim().length > 0 && (
               <div
