@@ -29,7 +29,13 @@ export function CommentsInbox() {
   };
 
   return (
-    <aside className="comments-inbox" aria-label="评论收件箱">
+    <>
+      <div
+        className="comments-panel-backdrop"
+        onClick={toggleInbox}
+        aria-hidden="true"
+      />
+      <aside className="comments-inbox" aria-label="评论收件箱">
       <header className="comments-panel-header">
         <h3>待处理评论（{open.length}）</h3>
         <button
@@ -67,5 +73,6 @@ export function CommentsInbox() {
         ))}
       </div>
     </aside>
+    </>
   );
 }

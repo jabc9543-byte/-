@@ -2954,6 +2954,50 @@ input, textarea { font-family: inherit; color: inherit; }
   color: inherit !important;
   caret-color: auto !important;
 }
+/* Make the textarea hit-area generous and let the system handle scroll
+   without blocking IME on touch. */
+.app-mobile .block-editor {
+  touch-action: manipulation;
+  min-height: 32px;
+  padding: 6px 4px;
+}
+/* Disable the drag handle on touch — it competed with tap-to-focus and
+   on some Android WebViews caused the keyboard to dismiss as the system
+   tried to start a drag operation. */
+.app-mobile .block-bullet {
+  -webkit-user-drag: none;
+  touch-action: manipulation;
+}
+
+/* Comments panel on mobile: full-width, respect status-bar safe area,
+   bigger close button, and a tappable backdrop. */
+.app-mobile .comments-panel,
+.app-mobile .comments-inbox {
+  width: 100vw;
+  max-width: 100vw;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.app-mobile .comments-panel-header {
+  padding: 10px 12px;
+}
+.app-mobile .comments-panel-header .comment-icon-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.comments-panel-backdrop {
+  display: none;
+}
+.app-mobile .comments-panel-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 44;
+}
 
 /* Mobile topbar — only visible when app-mobile class is set. */
 .mobile-topbar {

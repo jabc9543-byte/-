@@ -6,6 +6,7 @@ import { useSettingsStore } from "../stores/settings";
 import { useCollabStore } from "../stores/collab";
 import { useHistoryPanelStore } from "../stores/history";
 import { useCommentsStore } from "../stores/comments";
+import { useIsTouch } from "../hooks/useMediaQuery";
 import { QueryEmbed } from "./QueryEmbed";
 import { BlockEmbed } from "./BlockEmbed";
 import { TaskMarkerPill } from "./TaskMarkerPill";
@@ -42,6 +43,7 @@ export function BlockRow({ block }: Props) {
   const openHistory = useHistoryPanelStore((s) => s.open);
   const openComments = useCommentsStore((s) => s.openPanel);
   const commentsForBlock = useCommentsStore((s) => s.byBlock[block.id]);
+  const isTouch = useIsTouch();
 
   const ref = useRef<HTMLTextAreaElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -291,7 +293,7 @@ export function BlockRow({ block }: Props) {
     >
       <div
         className="block-bullet"
-        draggable
+        draggable={!isTouch}
         onDragStart={onDragStart}
         title="拖动以重新排序"
         aria-label="拖拽手柄"
@@ -343,8 +345,12 @@ export function BlockRow({ block }: Props) {
               onKeyDown={onKeyDown}
               placeholder=" "
               spellCheck={spellcheck}
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
+              inputMode="text"
             />
-            {!focused && value.trim().length > 0 && (
+            {!isTouch && !focused && value.trim().length > 0 && (
               <div
                 className="block-preview"
                 onClick={(e) => {

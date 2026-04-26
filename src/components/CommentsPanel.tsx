@@ -174,7 +174,13 @@ export function CommentsPanel() {
   };
 
   return (
-    <aside className="comments-panel" aria-label="块评论">
+    <>
+      <div
+        className="comments-panel-backdrop"
+        onClick={close}
+        aria-hidden="true"
+      />
+      <aside className="comments-panel" aria-label="块评论">
       <header className="comments-panel-header">
         <h3>评论</h3>
         <button
@@ -245,5 +251,6 @@ export function CommentsPanel() {
       </div>
       {error && <div className="comments-error">{error}</div>}
     </aside>
+    </>
   );
 }
