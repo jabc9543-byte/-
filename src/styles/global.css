@@ -2951,8 +2951,11 @@ input, textarea { font-family: inherit; color: inherit; }
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
-  height: 44px;
-  flex: 0 0 44px;
+  /* Respect Android/iOS status-bar safe area so the buttons aren't
+     covered by the system bar. */
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  height: calc(44px + env(safe-area-inset-top, 0px));
+  flex: 0 0 auto;
   background: var(--bg-alt);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -2960,15 +2963,16 @@ input, textarea { font-family: inherit; color: inherit; }
   z-index: 60;
 }
 .mobile-menu-btn {
-  width: 36px; height: 36px;
+  width: 44px; height: 44px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
   border-radius: 6px;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0;
+  flex: 0 0 auto;
 }
 .mobile-title {
   flex: 1;
@@ -3002,7 +3006,7 @@ input, textarea { font-family: inherit; color: inherit; }
   /* Sidebar becomes a left-side drawer, hidden by default. */
   .app-mobile .sidebar {
     position: fixed;
-    top: 44px;
+    top: calc(44px + env(safe-area-inset-top, 0px));
     left: 0;
     bottom: 0;
     width: min(84vw, 320px);
@@ -3019,7 +3023,7 @@ input, textarea { font-family: inherit; color: inherit; }
   /* Backlinks becomes a right-side drawer. */
   .app-mobile .backlinks-panel {
     position: fixed;
-    top: 44px;
+    top: calc(44px + env(safe-area-inset-top, 0px));
     right: 0;
     bottom: 0;
     width: min(92vw, 360px);
@@ -3037,7 +3041,7 @@ input, textarea { font-family: inherit; color: inherit; }
   .app-mobile .mobile-backdrop {
     display: block;
     position: fixed;
-    top: 44px;
+    top: calc(44px + env(safe-area-inset-top, 0px));
     left: 0;
     right: 0;
     bottom: 0;

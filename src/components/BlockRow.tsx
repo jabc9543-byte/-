@@ -48,6 +48,7 @@ export function BlockRow({ block }: Props) {
   const [value, setValue] = useState(block.content);
   const [dropPos, setDropPos] = useState<DropPos>(null);
   const [focused, setFocused] = useState(false);
+  const focusedRef = useRef(false);
 
   // --- Collaborative editing binding ---
   const collabStatus = useCollabStore((s) => s.status);
@@ -60,7 +61,12 @@ export function BlockRow({ block }: Props) {
   const applyingRemote = useRef(false);
 
   useEffect(() => {
-    setValue(block.content);
+    // Don't clobber in-progress edits while the textarea is focused —
+    // backend reload / file-watcher fires can otherwise reset the value
+    // mid-typing, which on Android dismisses the soft keyboard.
+    if (!focusedRef.current) {
+      setValue(block.content);
+    }
   }, [block.content]);
 
   // Lazy-load comment counts for this block so the badge appears. The
@@ -142,8 +148,18 @@ export function BlockRow({ block }: Props) {
   const autoresize = () => {
     const el = ref.current;
     if (!el) return;
+    // Measure the natural content height by temporarily clearing height.
+    // Only commit a new height if it actually differs — avoids a re-flow
+    // on every keystroke that on Android can briefly steal focus and
+    // dismiss the soft keyboard.
+    const prev = el.style.height;
     el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
+    const next = el.scrollHeight + "px";
+    if (prev !== next) {
+      el.style.height = next;
+    } else {
+      el.style.height = prev;
+    }
   };
 
   useEffect(autoresize, [value]);
@@ -302,6 +318,7 @@ export function BlockRow({ block }: Props) {
               }}
               onBlur={() => {
                 setFocused(false);
+                focusedRef.current = false;
                 onBlur();
                 if (collabActive) {
                   setLocalPresence({ blockId: null, anchor: null, head: null });
@@ -309,6 +326,7 @@ export function BlockRow({ block }: Props) {
               }}
               onFocus={() => {
                 setFocused(true);
+                focusedRef.current = true;
                 if (!collabActive) return;
                 const el = ref.current;
                 setLocalPresence({

@@ -393,6 +393,14 @@ export function Workspace() {
           >
             ⤺
           </button>
+          <button
+            className="mobile-menu-btn"
+            aria-label="返回首页（关闭图谱）"
+            onClick={() => useGraphStore.getState().close()}
+            title="返回首页"
+          >
+            ⌂
+          </button>
         </header>
       )}
       <Sidebar />
