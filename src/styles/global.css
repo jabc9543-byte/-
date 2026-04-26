@@ -315,6 +315,10 @@ input, textarea { font-family: inherit; color: inherit; }
   background: transparent; border: 0; outline: none;
   font-family: inherit; font-size: inherit; color: inherit;
   resize: none; white-space: pre-wrap; word-break: break-word;
+  /* Native CSS auto-grow — supported in Chromium 123+ (Android WebView).
+     Avoids JS-driven height changes during typing, which cancel IME
+     composition on Android and dismiss the soft keyboard. */
+  field-sizing: content;
 }
 .block-editor:focus { background: var(--bg-alt); border-radius: 3px; }
 
@@ -2939,6 +2943,16 @@ input, textarea { font-family: inherit; color: inherit; }
 @media (pointer: coarse) {
   button, .page-list button, .timeline-list button { min-height: 32px; }
   input, textarea, select { font-size: 16px; } /* avoids iOS zoom on focus */
+}
+
+/* On mobile, drop the inline-ref preview overlay entirely. Letting the
+   textarea be tapped directly avoids an extra programmatic .focus() hop
+   that on Android races with the soft keyboard appearing and causes it
+   to flicker / dismiss. Users edit raw markdown on mobile. */
+.app-mobile .block-preview { display: none !important; }
+.app-mobile .block-editor.is-blurred {
+  color: inherit !important;
+  caret-color: auto !important;
 }
 
 /* Mobile topbar — only visible when app-mobile class is set. */

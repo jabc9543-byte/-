@@ -145,24 +145,18 @@ export function BlockRow({ block }: Props) {
     markDirty(block.id);
   };
 
-  const autoresize = () => {
+  // Height is handled purely by CSS (field-sizing: content with a textarea
+  // fallback via min-height). Doing JS-driven autoresize on every keystroke
+  // forces a reflow that on Android cancels IME composition and dismisses
+  // the soft keyboard. Only normalize height once on blur in case the
+  // browser doesn't support field-sizing.
+  const autoresizeOnBlur = () => {
     const el = ref.current;
     if (!el) return;
-    // Measure the natural content height by temporarily clearing height.
-    // Only commit a new height if it actually differs — avoids a re-flow
-    // on every keystroke that on Android can briefly steal focus and
-    // dismiss the soft keyboard.
-    const prev = el.style.height;
+    if (CSS.supports?.("field-sizing", "content")) return;
     el.style.height = "auto";
-    const next = el.scrollHeight + "px";
-    if (prev !== next) {
-      el.style.height = next;
-    } else {
-      el.style.height = prev;
-    }
+    el.style.height = el.scrollHeight + "px";
   };
-
-  useEffect(autoresize, [value]);
 
   const onBlur = async () => {
     if (value !== block.content) await update(block.id, value);
@@ -319,6 +313,7 @@ export function BlockRow({ block }: Props) {
               onBlur={() => {
                 setFocused(false);
                 focusedRef.current = false;
+                autoresizeOnBlur();
                 onBlur();
                 if (collabActive) {
                   setLocalPresence({ blockId: null, anchor: null, head: null });
