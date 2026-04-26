@@ -2959,38 +2959,41 @@ input, textarea { font-family: inherit; color: inherit; }
    that on Android races with the soft keyboard appearing and causes it
    to flicker / dismiss. Users edit raw markdown on mobile. */
 .app-mobile .block-preview { display: none !important; }
-/* Use the dynamic viewport height so the soft keyboard shrinks the layout
-   instead of being painted over the input area. With `100vh` and an
-   overflow:hidden ancestor, Android can't scroll the focused field into
-   view and decides to dismiss the IME. `100dvh` plus `overflow:auto`
-   on the root flex container fixes this. */
-.app-mobile {
-  height: 100dvh !important;
-  min-height: 100dvh;
-  overflow: auto !important;
-}
 /* On Android the textarea was effectively invisible (transparent bg, no
    border, height shrinking via field-sizing) so users had nothing to tap.
-   Restore an obvious tappable surface and disable field-sizing here — JS
-   no longer drives autoresize on every keystroke either. */
+   Restore an obvious tappable surface. We deliberately do NOT use
+   field-sizing on mobile: any height change while focused causes the
+   Android WebView to reflow the layout and dismiss the soft keyboard.
+   Use a fixed multi-row height with overflow scrolling instead. */
 .app-mobile .block-editor {
+  /* Hard-disable field-sizing so the height never changes while typing. */
   field-sizing: fixed;
   touch-action: auto;
-  min-height: 44px;
-  padding: 8px 10px;
+  min-height: 88px;
+  height: auto;
+  resize: none;
+  padding: 10px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   pointer-events: auto;
   -webkit-user-select: text;
   user-select: text;
+  /* Prevent Android Chrome from auto-zooming on focus (font-size <16px). */
+  font-size: 16px;
+  line-height: 1.5;
+  /* Force the editor to keep its own color/caret regardless of any
+     desktop is-blurred rules. */
+  color: var(--fg) !important;
+  caret-color: var(--accent) !important;
 }
 .app-mobile .block-editor:focus {
   background: var(--bg);
   border-color: var(--accent);
+  outline: none;
 }
 .app-mobile .block-editor-stack {
-  min-height: 44px;
+  min-height: 88px;
 }
 /* Disable the drag handle on touch — it competed with tap-to-focus and
    on some Android WebViews caused the keyboard to dismiss as the system
@@ -2998,9 +3001,11 @@ input, textarea { font-family: inherit; color: inherit; }
 .app-mobile .block-bullet {
   -webkit-user-drag: none;
   touch-action: manipulation;
+  cursor: default;
   /* Smaller bullet so the editor gets all the tap area. */
   flex: 0 0 16px;
 }
+.app-mobile .block-bullet:active { cursor: default; }
 
 /* Comments panel on mobile: full-width, respect status-bar safe area,
    bigger close button, and a tappable backdrop. */

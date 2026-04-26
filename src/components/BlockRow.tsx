@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type * as Y from "yjs";
 import type { Block } from "../types";
 import { usePageStore } from "../stores/page";
@@ -29,6 +29,10 @@ function extractQueries(content: string): string[] {
 type DropPos = "before" | "after" | "child" | null;
 
 export function BlockRow({ block }: Props) {
+  return <BlockRowInner block={block} />;
+}
+
+function BlockRowImpl({ block }: Props) {
   const update = usePageStore((s) => s.updateBlock);
   const insertSibling = usePageStore((s) => s.insertSibling);
   const del = usePageStore((s) => s.deleteBlock);
@@ -38,7 +42,10 @@ export function BlockRow({ block }: Props) {
   const moveBlockTo = usePageStore((s) => s.moveBlockTo);
   const moveUp = usePageStore((s) => s.moveBlockUp);
   const moveDown = usePageStore((s) => s.moveBlockDown);
-  const blocks = usePageStore((s) => s.blocks);
+  // NOTE: deliberately NOT subscribing the entire `blocks` array — that
+  // caused BlockRow to re-render on every collab/file-watcher tick,
+  // which on Android WebView can drop the active IME connection. Read
+  // it lazily inside onDrop via getState() instead.
   const spellcheck = useSettingsStore((s) => s.spellcheck);
   const openHistory = useHistoryPanelStore((s) => s.open);
   const openComments = useCommentsStore((s) => s.openPanel);
@@ -63,7 +70,8 @@ export function BlockRow({ block }: Props) {
   const getOrCreateText = useCollabStore((s) => s.getOrCreateText);
   const markDirty = useCollabStore((s) => s.markDirty);
   const setLocalPresence = useCollabStore((s) => s.setLocalPresence);
-  const peers = useCollabStore((s) => s.peers);
+  // peers subscription moved to <PresenceChip> child component so a
+  // collab awareness update doesn't re-render every BlockRow.
   const ytextRef = useRef<Y.Text | null>(null);
   const applyingRemote = useRef(false);
 
@@ -71,8 +79,11 @@ export function BlockRow({ block }: Props) {
     // Don't clobber in-progress edits while the textarea is focused —
     // backend reload / file-watcher fires can otherwise reset the value
     // mid-typing, which on Android dismisses the soft keyboard.
-    if (!focusedRef.current) {
-      setValue(block.content);
+    if (focusedRef.current) return;
+    setValue(block.content);
+    // Keep DOM in sync (the textarea is uncontrolled — see below).
+    if (ref.current && ref.current.value !== block.content) {
+      ref.current.value = block.content;
     }
   }, [block.content]);
 
@@ -109,6 +120,7 @@ export function BlockRow({ block }: Props) {
       if (el && document.activeElement === el) {
         const start = el.selectionStart;
         const end = el.selectionEnd;
+        if (el.value !== next) el.value = next;
         setValue(next);
         requestAnimationFrame(() => {
           if (!ref.current) return;
@@ -118,6 +130,7 @@ export function BlockRow({ block }: Props) {
           applyingRemote.current = false;
         });
       } else {
+        if (el && el.value !== next) el.value = next;
         setValue(next);
         applyingRemote.current = false;
       }
@@ -273,7 +286,9 @@ export function BlockRow({ block }: Props) {
       return;
     }
 
-    const sameParent = blocks
+    const sameParent = usePageStore
+      .getState()
+      .blocks
       .filter((b) => b.parent_id === block.parent_id)
       .sort((a, b) => a.order - b.order);
     const targetIdx = sameParent.findIndex((b) => b.id === block.id);
@@ -317,9 +332,9 @@ export function BlockRow({ block }: Props) {
           <div className="block-editor-stack">
             <textarea
               ref={ref}
-              className={`block-editor${closed ? " block-editor-closed" : ""}${focused ? " is-focused" : " is-blurred"}`}
-              rows={isTouch ? 2 : 1}
-              value={value}
+              className={`block-editor${closed ? " block-editor-closed" : ""}${focused ? " is-focused" : " is-blurred"}${isTouch ? " is-touch" : ""}`}
+              rows={isTouch ? 3 : 1}
+              defaultValue={block.content}
               onCompositionStart={() => {
                 composingRef.current = true;
               }}
@@ -395,22 +410,7 @@ export function BlockRow({ block }: Props) {
               </div>
             )}
           </div>
-          {collabActive && (
-            <span className="block-presence" aria-label="正在编辑此块的协作者">
-              {peers
-                .filter((p) => p.blockId === block.id)
-                .map((p) => (
-                  <span
-                    key={p.clientId}
-                    className="block-presence-dot"
-                    style={{ background: p.color }}
-                    title={p.name}
-                  >
-                    {p.name.slice(0, 1).toUpperCase()}
-                  </span>
-                ))}
-            </span>
-          )}
+          {collabActive && <PresenceChip blockId={block.id} />}
           <button
             type="button"
             className="block-history-btn"
@@ -481,5 +481,34 @@ export function BlockRow({ block }: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+// Memoized inner component. Only re-renders when the block prop's
+// identity changes (page store mutates blocks via .map() so a content
+// edit produces a new object). Crucially, awareness/peer ticks from
+// the collab store do NOT subscribe here so they can't re-render the
+// row while the user is typing on Android.
+const BlockRowInner = memo(BlockRowImpl, (prev, next) => prev.block === next.block);
+
+// Tiny subscriber for collab presence \u2014 isolated so a peer awareness
+// update only re-renders this 16px chip, not the whole BlockRow.
+function PresenceChip({ blockId }: { blockId: string }) {
+  const peers = useCollabStore((s) => s.peers);
+  const here = peers.filter((p) => p.blockId === blockId);
+  if (here.length === 0) return null;
+  return (
+    <span className="block-presence" aria-label="正在编辑此块的协作者">
+      {here.map((p) => (
+        <span
+          key={p.clientId}
+          className="block-presence-dot"
+          style={{ background: p.color }}
+          title={p.name}
+        >
+          {p.name.slice(0, 1).toUpperCase()}
+        </span>
+      ))}
+    </span>
   );
 }
