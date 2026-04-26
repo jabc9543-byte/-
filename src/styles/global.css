@@ -335,6 +335,15 @@ input, textarea { font-family: inherit; color: inherit; }
 .block-editor-stack .block-editor.is-blurred::placeholder {
   color: var(--fg-muted);
 }
+/* On mobile, the transparent text/caret on .is-blurred makes Android's
+   IME think the field is not editable and dismiss the soft keyboard
+   immediately on tap. Re-assert visible text and caret with higher
+   specificity than the desktop selector above. */
+.app-mobile .block-editor-stack .block-editor.is-blurred,
+.app-mobile .block-editor-stack .block-editor {
+  color: var(--fg) !important;
+  caret-color: auto !important;
+}
 .block-preview {
   position: absolute; inset: 0;
   padding: 2px 4px;
@@ -2950,23 +2959,21 @@ input, textarea { font-family: inherit; color: inherit; }
    that on Android races with the soft keyboard appearing and causes it
    to flicker / dismiss. Users edit raw markdown on mobile. */
 .app-mobile .block-preview { display: none !important; }
-.app-mobile .block-editor.is-blurred {
-  color: inherit !important;
-  caret-color: auto !important;
-}
 /* On Android the textarea was effectively invisible (transparent bg, no
    border, height shrinking via field-sizing) so users had nothing to tap.
    Restore an obvious tappable surface and disable field-sizing here — JS
    no longer drives autoresize on every keystroke either. */
 .app-mobile .block-editor {
   field-sizing: fixed;
-  touch-action: manipulation;
+  touch-action: auto;
   min-height: 44px;
   padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   pointer-events: auto;
+  -webkit-user-select: text;
+  user-select: text;
 }
 .app-mobile .block-editor:focus {
   background: var(--bg);
