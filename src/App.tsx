@@ -26,12 +26,17 @@ export default function App() {
   const reloadActiveGraphViews = async (reason: string) => {
     const page = usePageStore.getState();
     const wb = useWhiteboardStore.getState();
+    const startedAt = Date.now();
     await page.refreshPages();
     await wb.refreshList();
     const active = usePageStore.getState().activePageId;
     if (active) {
       logMobileDebug("graph.reload", reason, { activePageId: active });
       await page.openPage(active);
+      logMobileDebug("graph.reload.done", reason, {
+        activePageId: active,
+        tookMs: Date.now() - startedAt,
+      });
     }
   };
 
@@ -46,27 +51,55 @@ export default function App() {
     queuedReloadReason.current = reason;
     if (shouldHoldGraphReload()) {
       pendingGraphReload.current = true;
+      logMobileDebug("graph.reload.queue", "held before schedule", {
+        reason,
+        pendingBlockWrites: usePageStore.getState().pendingBlockWrites,
+      });
       return;
     }
     clearReloadTimer();
+    logMobileDebug("graph.reload.queue", "scheduled", {
+      reason,
+      pendingBlockWrites: usePageStore.getState().pendingBlockWrites,
+    });
     reloadTimer.current = window.setTimeout(async () => {
       reloadTimer.current = null;
       if (shouldHoldGraphReload()) {
         pendingGraphReload.current = true;
+        logMobileDebug("graph.reload.queue", "held on timer fire", {
+          reason: queuedReloadReason.current,
+          pendingBlockWrites: usePageStore.getState().pendingBlockWrites,
+        });
         return;
       }
       if (reloadInFlight.current) {
         pendingGraphReload.current = true;
+        logMobileDebug("graph.reload.queue", "inflight, defer next", {
+          reason: queuedReloadReason.current,
+        });
         return;
       }
       reloadInFlight.current = true;
       const runReason = queuedReloadReason.current;
+      logMobileDebug("graph.reload.queue", "timer fire", {
+        reason: runReason,
+        pendingBlockWrites: usePageStore.getState().pendingBlockWrites,
+      });
       try {
         await reloadActiveGraphViews(runReason);
+      } catch (error) {
+        logMobileDebug("graph.reload.error", "reload failed", {
+          reason: runReason,
+          error: String(error),
+        });
+        throw error;
       } finally {
         reloadInFlight.current = false;
         if (pendingGraphReload.current && !shouldHoldGraphReload()) {
           pendingGraphReload.current = false;
+          logMobileDebug("graph.reload.queue", "flush queued after inflight", {
+            reason: runReason,
+          });
           scheduleReload("flush deferred graph:changed");
         }
       }
@@ -78,16 +111,51 @@ export default function App() {
   }, [hydrate]);
 
   useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      logMobileDebug("window.error", event.message || "unknown error", {
+        filename: event.filename,
+        line: event.lineno,
+        column: event.colno,
+      });
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      logMobileDebug("window.rejection", "unhandled rejection", {
+        reason: String(event.reason),
+      });
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!graph) return;
 
     const flushDeferredReload = () => {
       if (!pendingGraphReload.current) return;
-      if (shouldHoldGraphReload()) return;
+      if (shouldHoldGraphReload()) {
+        logMobileDebug("graph.reload.flush", "still held on flush", {
+          pendingBlockWrites: usePageStore.getState().pendingBlockWrites,
+        });
+        return;
+      }
       pendingGraphReload.current = false;
+      logMobileDebug("graph.reload.flush", "flush deferred reload", {
+        pendingBlockWrites: usePageStore.getState().pendingBlockWrites,
+      });
       scheduleReload("flush deferred graph:changed");
     };
 
     const onFocusOut = () => {
+      logMobileDebug("focusout", "window focusout", {
+        activeTag: document.activeElement instanceof HTMLElement
+          ? document.activeElement.tagName
+          : "null",
+        pendingBlockWrites: usePageStore.getState().pendingBlockWrites,
+      });
       window.setTimeout(flushDeferredReload, 0);
     };
 
@@ -95,6 +163,10 @@ export default function App() {
     window.addEventListener("visibilitychange", flushDeferredReload);
     const unsubscribePendingWrites = usePageStore.subscribe((state, prevState) => {
       if (state.pendingBlockWrites === 0 && prevState.pendingBlockWrites > 0) {
+        logMobileDebug("page.write", "pending writes drained", {
+          prev: prevState.pendingBlockWrites,
+          next: state.pendingBlockWrites,
+        });
         window.setTimeout(flushDeferredReload, 0);
       }
     });

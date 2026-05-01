@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { api } from "../api";
 import type { Block, Page, PageId } from "../types";
 import { useFavoritesStore } from "./favorites";
+import { logMobileDebug } from "../utils/mobileDebug";
 
 interface PageState {
   pages: Page[];
@@ -66,10 +67,18 @@ export const usePageStore = create<PageState>((set, get) => ({
   },
 
   openPage: async (id) => {
+    const startedAt = Date.now();
+    logMobileDebug("page.open", "start", { id });
     set({ loading: true, activePageId: id });
     const page = await api.getPage(id);
     const blocks = page ? await loadBlocks(id) : [];
     set({ page, blocks, loading: false });
+    logMobileDebug("page.open", "done", {
+      id,
+      pageFound: !!page,
+      blockCount: blocks.length,
+      tookMs: Date.now() - startedAt,
+    });
     if (page) {
       try {
         useFavoritesStore.getState().pushRecent(id);
@@ -122,19 +131,43 @@ export const usePageStore = create<PageState>((set, get) => ({
   },
 
   updateBlock: async (id, content) => {
+    const startedAt = Date.now();
+    const prevBlock = get().blocks.find((b) => b.id === id);
+    logMobileDebug("page.updateBlock", "start", {
+      id,
+      prevLength: prevBlock?.content.length ?? null,
+      nextLength: content.length,
+      pendingBefore: get().pendingBlockWrites,
+    });
     set((s) => ({
       pendingBlockWrites: s.pendingBlockWrites + 1,
       blocks: s.blocks.map((b) => (b.id === id ? { ...b, content } : b)),
     }));
     try {
       const updated = await api.updateBlock(id, content);
+      logMobileDebug("page.updateBlock", "success", {
+        id,
+        returnedLength: updated.content.length,
+        tookMs: Date.now() - startedAt,
+      });
       set((s) => ({
         blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...updated } : b)),
       }));
+    } catch (error) {
+      logMobileDebug("page.updateBlock", "error", {
+        id,
+        error: String(error),
+        tookMs: Date.now() - startedAt,
+      });
+      throw error;
     } finally {
       set((s) => ({
         pendingBlockWrites: Math.max(0, s.pendingBlockWrites - 1),
       }));
+      logMobileDebug("page.updateBlock", "finish", {
+        id,
+        pendingAfter: get().pendingBlockWrites,
+      });
     }
   },
 

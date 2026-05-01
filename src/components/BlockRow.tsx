@@ -91,6 +91,15 @@ function BlockRowImpl({ block }: Props) {
       }
       return;
     }
+    const domValue = ref.current?.value;
+    if (isTouch && domValue !== undefined && domValue !== block.content) {
+      logMobileDebug("block.content", "apply external sync", {
+        blockId: block.id,
+        domLength: domValue.length,
+        incomingLength: block.content.length,
+        stateLength: value.length,
+      });
+    }
     setValue(block.content);
     // Keep DOM in sync (the textarea is uncontrolled — see below).
     if (ref.current && ref.current.value !== block.content) {
@@ -206,14 +215,40 @@ function BlockRowImpl({ block }: Props) {
   const onBlur = async () => {
     const next = getCurrentValue();
     if (isTouch) {
-      logMobileDebug("blur", "persist block", {
+      logMobileDebug("blur", "persist block start", {
         blockId: block.id,
         valueLength: next.length,
         contentLength: block.content.length,
+        activeTag: document.activeElement instanceof HTMLElement
+          ? document.activeElement.tagName
+          : "null",
       });
     }
     setValue(next);
-    if (next !== block.content) await update(block.id, next);
+    if (next !== block.content) {
+      try {
+        await update(block.id, next);
+        if (isTouch) {
+          logMobileDebug("blur", "persist block done", {
+            blockId: block.id,
+            valueLength: next.length,
+          });
+        }
+      } catch (error) {
+        if (isTouch) {
+          logMobileDebug("blur", "persist block error", {
+            blockId: block.id,
+            error: String(error),
+          });
+        }
+        throw error;
+      }
+    } else if (isTouch) {
+      logMobileDebug("blur", "persist skipped same content", {
+        blockId: block.id,
+        valueLength: next.length,
+      });
+    }
   };
 
   const wrapSelection = (prefix: string, suffix = prefix) => {
@@ -423,6 +458,7 @@ function BlockRowImpl({ block }: Props) {
                     activeTag: document.activeElement instanceof HTMLElement
                       ? document.activeElement.tagName
                       : "null",
+                    domLength: ref.current?.value.length ?? null,
                   });
                 }
                 setFocused(false);
