@@ -103,6 +103,7 @@ pub fn run() {
             commands::transfer::export_markdown,
             commands::transfer::export_json,
             commands::transfer::import_markdown,
+            commands::transfer::import_markdown_file,
             commands::transfer::import_json,
             commands::transfer::export_opml,
             commands::transfer::import_opml,

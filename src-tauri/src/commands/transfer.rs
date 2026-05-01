@@ -159,15 +159,34 @@ pub async fn import_markdown(
         read_dir_markdown(&src)?
     };
 
+    import_markdown_entries(&graph, entries).await
+}
+
+#[tauri::command]
+pub async fn import_markdown_file(
+    name: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> AppResult<ImportReport> {
+    let graph = state.current()?;
+    let page_name = Path::new(&name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("page")
+        .to_string();
+    import_markdown_entries(&graph, vec![(page_name, content)]).await
+}
+
+async fn import_markdown_entries(
+    graph: &crate::graph::Graph,
+    entries: Vec<(String, String)>,
+) -> AppResult<ImportReport> {
     let mut page_count = 0usize;
     let mut block_count = 0usize;
     for (name, body) in entries {
         let page = graph.backend.create_page(&name).await?;
         let parsed = parser::parse_page_markdown(&page.id, &body);
-        // Insert blocks top-down preserving tree structure.
-        // `parse_page_markdown` returns flat blocks with parent_id set.
-        // We walk them in order; `insert_block` re-nanoid's ids so we need a
-        // mapping old_id -> new_id.
         let mut id_map: HashMap<String, String> = HashMap::new();
         for b in &parsed {
             let parent = b

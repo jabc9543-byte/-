@@ -120,6 +120,8 @@ export const api = {
     ),
   importMarkdown: (path: string) =>
     invoke<{ pages: number; blocks: number }>("import_markdown", { path }),
+  importMarkdownFile: (name: string, content: string) =>
+    invoke<{ pages: number; blocks: number }>("import_markdown_file", { name, content }),
   importJson: (path: string) =>
     invoke<{ pages: number; blocks: number }>("import_json", { path }),
   exportOpml: (path: string) =>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useSettingsStore } from "../stores/settings";
 import { useCollabStore } from "../stores/collab";
 import { useGraphStore } from "../stores/graph";
@@ -6,6 +7,12 @@ import { UpdateSection } from "./UpdateSection";
 import { EncryptionSection } from "./EncryptionSection";
 import { BackupSection } from "./BackupSection";
 import { AiSection } from "./AiSection";
+import { useIsMobile } from "../hooks/useMediaQuery";
+import {
+  requestCameraAccess,
+  requestFileAccess,
+  requestGalleryAccess,
+} from "../utils/mobilePermissions";
 
 interface Props {
   onClose: () => void;
@@ -23,6 +30,8 @@ export function SettingsModal({ onClose }: Props) {
   const graph = useGraphStore((s) => s.graph);
   const start = useCollabStore((s) => s.start);
   const stop = useCollabStore((s) => s.stop);
+  const isMobile = useIsMobile();
+  const [permissionStatus, setPermissionStatus] = useState<string>("");
 
   const reconnect = () => {
     if (!graph) return;
@@ -122,6 +131,54 @@ export function SettingsModal({ onClose }: Props) {
         <h3>键盘快捷键</h3>
         <KeymapEditor />
       </section>
+
+      {isMobile && (
+        <section className="settings-section">
+          <h3>设备权限</h3>
+          <div className="settings-row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button
+              className="settings-reconnect"
+              onClick={async () => {
+                try {
+                  await requestCameraAccess();
+                  setPermissionStatus("摄像头权限已授予");
+                } catch (e) {
+                  setPermissionStatus(`摄像头权限失败：${String(e)}`);
+                }
+              }}
+            >
+              申请摄像头权限
+            </button>
+            <button
+              className="settings-reconnect"
+              onClick={async () => {
+                try {
+                  const count = await requestGalleryAccess();
+                  setPermissionStatus(count > 0 ? `图库访问成功：已选择 ${count} 个文件` : "图库访问已打开，但未选择文件");
+                } catch (e) {
+                  setPermissionStatus(`图库访问失败：${String(e)}`);
+                }
+              }}
+            >
+              申请图库访问
+            </button>
+            <button
+              className="settings-reconnect"
+              onClick={async () => {
+                try {
+                  const count = await requestFileAccess();
+                  setPermissionStatus(count > 0 ? `文件访问成功：已选择 ${count} 个文件` : "文件访问已打开，但未选择文件");
+                } catch (e) {
+                  setPermissionStatus(`文件访问失败：${String(e)}`);
+                }
+              }}
+            >
+              申请文件访问
+            </button>
+          </div>
+          {permissionStatus && <p className="settings-hint">{permissionStatus}</p>}
+        </section>
+      )}
 
       <UpdateSection />
       <EncryptionSection />

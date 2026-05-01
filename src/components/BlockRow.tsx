@@ -76,6 +76,8 @@ function BlockRowImpl({ block }: Props) {
   const ytextRef = useRef<Y.Text | null>(null);
   const applyingRemote = useRef(false);
 
+  const getCurrentValue = () => ref.current?.value ?? value;
+
   useEffect(() => {
     // Don't clobber in-progress edits while the textarea is focused —
     // backend reload / file-watcher fires can otherwise reset the value
@@ -202,25 +204,29 @@ function BlockRowImpl({ block }: Props) {
   };
 
   const onBlur = async () => {
+    const next = getCurrentValue();
     if (isTouch) {
       logMobileDebug("blur", "persist block", {
         blockId: block.id,
-        valueLength: value.length,
+        valueLength: next.length,
         contentLength: block.content.length,
       });
     }
-    if (value !== block.content) await update(block.id, value);
+    setValue(next);
+    if (next !== block.content) await update(block.id, next);
   };
 
   const wrapSelection = (prefix: string, suffix = prefix) => {
     const el = ref.current;
     if (!el) return;
+    const current = getCurrentValue();
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const before = value.slice(0, start);
-    const sel = value.slice(start, end);
-    const after = value.slice(end);
+    const before = current.slice(0, start);
+    const sel = current.slice(start, end);
+    const after = current.slice(end);
     const next = `${before}${prefix}${sel}${suffix}${after}`;
+    el.value = next;
     setValue(next);
     if (collabActive) syncToY(next);
     requestAnimationFrame(() => {
@@ -230,11 +236,12 @@ function BlockRowImpl({ block }: Props) {
   };
 
   const onKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const current = getCurrentValue();
     if (isTouch) {
       logMobileDebug("keydown", e.key, {
         blockId: block.id,
         composing: (e.nativeEvent as KeyboardEvent).isComposing || e.keyCode === 229,
-        valueLength: value.length,
+        valueLength: current.length,
       });
     }
     // Don't intercept keys while an IME is composing (Chinese/Japanese
@@ -248,23 +255,23 @@ function BlockRowImpl({ block }: Props) {
     const mod = e.metaKey || e.ctrlKey;
     if (e.key === "Enter" && !e.shiftKey && !mod) {
       e.preventDefault();
-      if (value !== block.content) await update(block.id, value);
+      if (current !== block.content) await update(block.id, current);
       await insertSibling(block.id, "");
-    } else if (e.key === "Backspace" && value === "") {
+    } else if (e.key === "Backspace" && current === "") {
       e.preventDefault();
       await del(block.id);
     } else if (e.key === "Tab") {
       e.preventDefault();
-      if (value !== block.content) await update(block.id, value);
+      if (current !== block.content) await update(block.id, current);
       if (e.shiftKey) await outdent(block.id);
       else await indent(block.id);
     } else if (mod && e.key === "Enter") {
       e.preventDefault();
-      if (value !== block.content) await update(block.id, value);
+      if (current !== block.content) await update(block.id, current);
       await cycleTask(block.id);
     } else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       e.preventDefault();
-      if (value !== block.content) await update(block.id, value);
+      if (current !== block.content) await update(block.id, current);
       if (e.key === "ArrowUp") await moveUp(block.id);
       else await moveDown(block.id);
     } else if (mod && (e.key === "b" || e.key === "B")) {
