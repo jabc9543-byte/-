@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Workspace } from "./components/Workspace";
 import { OpenGraphGate } from "./components/OpenGraphGate";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { PermissionDialogHost } from "./components/PermissionDialogHost";
 import { useGraphStore } from "./stores/graph";
 import { usePageStore } from "./stores/page";
 import { useWhiteboardStore } from "./stores/whiteboard";
@@ -200,5 +202,10 @@ export default function App() {
     };
   }, [graph]);
 
-  return graph ? <Workspace /> : <OpenGraphGate />;
+  return (
+    <ErrorBoundary>
+      {graph ? <Workspace /> : <OpenGraphGate />}
+      {!graph && <PermissionDialogHost />}
+    </ErrorBoundary>
+  );
 }

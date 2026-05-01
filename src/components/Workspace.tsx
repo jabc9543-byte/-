@@ -21,6 +21,8 @@ import { CommentsInbox } from "./CommentsInbox";
 import { AiPanel } from "./AiPanel";
 import { HelpPanel } from "./HelpPanel";
 import { MobileDebugPanel } from "./MobileDebugPanel";
+import { MobileEditToolbar } from "./MobileEditToolbar";
+import { PermissionDialogHost } from "./PermissionDialogHost";
 import { usePageStore } from "../stores/page";
 import { useWhiteboardStore } from "../stores/whiteboard";
 import { usePluginStore } from "../stores/plugins";
@@ -517,6 +519,8 @@ export function Workspace() {
         />
       )}
       {isMobile && <MobileDebugPanel />}
+      {isMobile && <MobileEditToolbar />}
+      <PermissionDialogHost />
       <CollabPresence />
       <CommentsInboxToggle />
       {palette && <CommandPalette onClose={() => setPalette(false)} />}

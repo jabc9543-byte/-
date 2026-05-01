@@ -12,6 +12,10 @@ import { BlockEmbed } from "./BlockEmbed";
 import { TaskMarkerPill } from "./TaskMarkerPill";
 import { InlineRefs } from "./InlineRefs";
 import { logMobileDebug } from "../utils/mobileDebug";
+import {
+  setActiveMobileEditor,
+  getActiveMobileEditor,
+} from "../utils/mobileEditor";
 
 interface Props {
   block: Block;
@@ -464,6 +468,17 @@ function BlockRowImpl({ block }: Props) {
                 setFocused(false);
                 focusedRef.current = false;
                 autoresizeOnBlur();
+                // Defer mobile-editor unregister to the next tick so a tap on
+                // the floating toolbar doesn't tear it down before the click
+                // handler runs.
+                if (isTouch) {
+                  window.setTimeout(() => {
+                    if (!focusedRef.current) {
+                      const cur = getActiveMobileEditor();
+                      if (cur && cur.blockId === block.id) setActiveMobileEditor(null);
+                    }
+                  }, 120);
+                }
                 onBlur();
                 if (collabActive) {
                   setLocalPresence({ blockId: null, anchor: null, head: null });
@@ -478,6 +493,23 @@ function BlockRowImpl({ block }: Props) {
                 }
                 setFocused(true);
                 focusedRef.current = true;
+                if (isTouch && ref.current) {
+                  setActiveMobileEditor({
+                    blockId: block.id,
+                    pageId: usePageStore.getState().activePageId,
+                    textarea: ref.current,
+                    getValue: () => ref.current?.value ?? "",
+                    wrap: (prefix, suffix = prefix) => {
+                      wrapSelection(prefix, suffix);
+                    },
+                    flush: async () => {
+                      const next = ref.current?.value ?? value;
+                      if (next !== block.content) {
+                        await update(block.id, next);
+                      }
+                    },
+                  });
+                }
                 if (!collabActive) return;
                 const el = ref.current;
                 setLocalPresence({

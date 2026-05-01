@@ -4451,3 +4451,233 @@ input, textarea { font-family: inherit; color: inherit; }
     width: 100vw;
   }
 }
+
+
+/* ---------- Mobile editing toolbar (module 27) ---------- */
+.mobile-edit-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 6px 8px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.18);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mobile-edit-toolbar::-webkit-scrollbar { display: none; }
+.mobile-edit-toolbar .mobile-edit-btn {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--fg);
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-edit-toolbar .mobile-edit-btn:active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.mobile-edit-toolbar .mobile-edit-btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.mobile-edit-toolbar .mobile-edit-sep {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: var(--border);
+}
+
+/* Reserve room above the mobile toolbar so the last block isn't hidden
+   behind it. Only applies when the on-screen toolbar is visible — we
+   keep it always-on on touch since the registry resolves to null when
+   no block is focused (the empty toolbar stays unmounted). Adding
+   bottom padding unconditionally is harmless when the bar is unmounted. */
+.app-mobile .main {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* Bigger tap targets for per-block utility buttons on touch. They were
+   getting clipped or wrapped under the textarea on narrow phones. */
+.app-mobile .block-line {
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.app-mobile .block-history-btn,
+.app-mobile .block-comment-btn {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 8px;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+/* Settings modal on mobile: ensure the close button isn't clipped by
+   the status bar, and the body scrolls within the safe area. */
+.app-mobile .settings-modal {
+  width: 100vw;
+  max-width: 100vw;
+  max-height: 100vh;
+  height: 100vh;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-mobile .settings-header {
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.app-mobile .settings-close {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 22px;
+}
+.app-mobile .settings-modal > :last-child,
+.app-mobile .settings-section:last-of-type {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Mobile debug toggle: pull above on-screen toolbar when present. */
+.app-mobile .mobile-debug-toggle {
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+.app-mobile .mobile-debug-sheet {
+  bottom: calc(124px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- Permission confirmation dialog ---------- */
+.perm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 300;
+}
+.perm-dialog {
+  width: min(420px, 100%);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  padding: 20px 22px 16px;
+  color: var(--fg);
+}
+.perm-dialog-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+.perm-dialog-desc {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.perm-dialog-details {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+.perm-dialog-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 4px 0 12px;
+}
+.perm-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.perm-dialog-btn {
+  min-width: 80px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.perm-dialog-btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ---------- Error boundary ---------- */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 24px;
+  gap: 12px;
+  text-align: center;
+}
+.error-boundary h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--danger, #ef4444);
+}
+.error-boundary-msg {
+  max-width: 90vw;
+  max-height: 30vh;
+  overflow: auto;
+  padding: 10px 14px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+.error-boundary-actions {
+  display: flex;
+  gap: 8px;
+}
+.error-boundary-actions button {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
