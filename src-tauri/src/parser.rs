@@ -24,6 +24,9 @@ static RE_SCHEDULED: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})").unwrap());
 static RE_DEADLINE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)DEADLINE:\s*<(\d{4}-\d{2}-\d{2})").unwrap());
+static RE_BLOCK_ID_COMMENT: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^<!--\s*logseq-rs:block-id:([A-Za-z0-9_\-]{6,})\s*-->$").unwrap()
+});
 
 #[derive(Debug, Default, Clone)]
 pub struct References {
@@ -78,6 +81,12 @@ pub fn extract_dates(content: &str) -> (Option<String>, Option<String>) {
     (sched, dead)
 }
 
+fn extract_block_id_comment(line: &str) -> Option<BlockId> {
+    RE_BLOCK_ID_COMMENT
+        .captures(line.trim())
+        .map(|cap| cap[1].to_string())
+}
+
 /// Replace the task marker at the start of the block's first line.
 /// If the block has no marker, prepend `new`. If `new` is `None`, strip it.
 pub fn set_task_marker(content: &str, new: Option<TaskMarker>) -> String {
@@ -122,6 +131,10 @@ pub fn parse_page_markdown(page_id: &PageId, body: &str) -> Vec<Block> {
 
         if !bullet {
             if let Some(last) = blocks.last_mut() {
+                if let Some(block_id) = extract_block_id_comment(rest) {
+                    last.id = block_id;
+                    continue;
+                }
                 if !last.content.is_empty() {
                     last.content.push('\n');
                 }
@@ -200,6 +213,7 @@ pub fn render_page_markdown(blocks: &[Block]) -> String {
         for line in lines {
             out.push_str(&format!("{indent}  {line}\n"));
         }
+        out.push_str(&format!("{indent}  <!-- logseq-rs:block-id:{} -->\n", block.id));
         let _ = first_line_done;
 
         let mut kids: Vec<&Block> = block
@@ -260,5 +274,27 @@ mod tests {
         assert_eq!(blocks[1].parent_id.as_deref(), Some(blocks[0].id.as_str()));
         assert_eq!(blocks[2].parent_id.as_deref(), Some(blocks[1].id.as_str()));
         assert!(blocks[3].parent_id.is_none());
+    }
+
+    #[test]
+    fn roundtrip_preserves_block_ids() {
+        let md = "- root\n  - child\n- next";
+        let first = parse_page_markdown(&"p".to_string(), md);
+        let rendered = render_page_markdown(&first);
+        let second = parse_page_markdown(&"p".to_string(), &rendered);
+        assert_eq!(first.len(), second.len());
+        assert_eq!(first[0].id, second[0].id);
+        assert_eq!(first[1].id, second[1].id);
+        assert_eq!(first[2].id, second[2].id);
+        assert_eq!(second[1].parent_id.as_deref(), Some(second[0].id.as_str()));
+    }
+
+    #[test]
+    fn parses_embedded_block_id_comments() {
+        let md = "- root\n  <!-- logseq-rs:block-id:abc12345 -->\n  - child\n    <!-- logseq-rs:block-id:def67890 -->";
+        let blocks = parse_page_markdown(&"p".to_string(), md);
+        assert_eq!(blocks[0].id, "abc12345");
+        assert_eq!(blocks[1].id, "def67890");
+        assert_eq!(blocks[1].parent_id.as_deref(), Some("abc12345"));
     }
 }
