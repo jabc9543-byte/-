@@ -540,7 +540,7 @@ function BlockRowImpl({ block }: Props) {
               data-gramm_editor="false"
               data-enable-grammarly="false"
             />
-            {!isTouch && !focused && value.trim().length > 0 && (
+            {!focused && value.trim().length > 0 && (
               <div
                 className="block-preview"
                 onClick={(e) => {

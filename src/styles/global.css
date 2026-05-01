@@ -3019,11 +3019,27 @@ input, textarea { font-family: inherit; color: inherit; }
   input, textarea, select { font-size: 16px; } /* avoids iOS zoom on focus */
 }
 
-/* On mobile, drop the inline-ref preview overlay entirely. Letting the
-   textarea be tapped directly avoids an extra programmatic .focus() hop
-   that on Android races with the soft keyboard appearing and causes it
-   to flicker / dismiss. Users edit raw markdown on mobile. */
-.app-mobile .block-preview { display: none !important; }
+/* On mobile, show the rendered inline-ref preview as a pass-through
+   overlay so [[wiki-links]] / #tags / ((block-refs)) are clickable —
+   while taps on plain text still fall through to the textarea so the
+   soft keyboard doesn't flicker (the previous Android race we fixed). */
+.app-mobile .block-preview {
+  display: block;
+  /* keep absolute layout from the desktop rule */
+  pointer-events: none;
+  font-size: 16px;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+.app-mobile .block-preview a,
+.app-mobile .block-preview .tag-link,
+.app-mobile .block-preview .page-link,
+.app-mobile .block-preview .block-ref {
+  pointer-events: auto;
+  /* enlarge tap targets a little for fingers */
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
 /* On Android the textarea was effectively invisible (transparent bg, no
    border, height shrinking via field-sizing) so users had nothing to tap.
    Restore an obvious tappable surface. We deliberately do NOT use
