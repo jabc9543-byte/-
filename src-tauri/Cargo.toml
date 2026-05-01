@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.0.4", features = [] }
 
 [dependencies]
-tauri = { version = "2.1.1", features = ["devtools"] }
+tauri = { version = "2.1.1" }
 tauri-plugin-dialog = "2.0.4"
 tauri-plugin-fs = "2.0.3"
 serde = { version = "1", features = ["derive"] }
@@ -50,10 +50,14 @@ zeroize = "1.8"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Enable web inspector only in debug builds to keep the release/Android
+# binary smaller. Use `cargo build --features devtools` to opt in.
+devtools = ["tauri/devtools"]
 
 [profile.release]
 panic = "abort"
 codegen-units = 1
 lto = true
-opt-level = "s"
+opt-level = "z"
 strip = true
+incremental = false

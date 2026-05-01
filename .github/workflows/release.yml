@@ -189,7 +189,12 @@ jobs:
       - name: Install Rust toolchain with Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: "aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android"
+          # Only build for modern 64-bit ARM phones to keep the APK
+          # small. >99% of in-market Android devices are arm64-v8a;
+          # x86 / x86_64 are emulator-only and i686 is essentially
+          # extinct. Each extra ABI roughly adds another full copy of
+          # the Rust .so to the universal APK.
+          targets: "aarch64-linux-android"
 
       - name: Cache cargo registry & build
         uses: swatinem/rust-cache@v2
@@ -231,11 +236,14 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
         run: |
+          # `--split-per-abi` produces per-architecture APKs instead of
+          # a fat universal APK; combined with the single arm64 target
+          # above this cuts download size by ~3-4x.
           if [ -z "$ANDROID_KEY_BASE64" ]; then
             echo "No keystore configured — building DEBUG-signed APK so it can be installed."
-            npx tauri android build --apk --debug
+            npx tauri android build --apk --debug --split-per-abi
           else
-            npx tauri android build --apk
+            npx tauri android build --apk --split-per-abi
           fi
 
       - name: Collect APK artifacts
