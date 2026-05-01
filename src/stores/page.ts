@@ -9,6 +9,7 @@ interface PageState {
   page: Page | null;
   blocks: Block[];
   loading: boolean;
+  pendingBlockWrites: number;
 
   refreshPages: () => Promise<void>;
   openPage: (id: PageId) => Promise<void>;
@@ -57,6 +58,7 @@ export const usePageStore = create<PageState>((set, get) => ({
   page: null,
   blocks: [],
   loading: false,
+  pendingBlockWrites: 0,
 
   refreshPages: async () => {
     const pages = await api.listPages();
@@ -120,10 +122,20 @@ export const usePageStore = create<PageState>((set, get) => ({
   },
 
   updateBlock: async (id, content) => {
-    const updated = await api.updateBlock(id, content);
     set((s) => ({
-      blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...updated } : b)),
+      pendingBlockWrites: s.pendingBlockWrites + 1,
+      blocks: s.blocks.map((b) => (b.id === id ? { ...b, content } : b)),
     }));
+    try {
+      const updated = await api.updateBlock(id, content);
+      set((s) => ({
+        blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...updated } : b)),
+      }));
+    } finally {
+      set((s) => ({
+        pendingBlockWrites: Math.max(0, s.pendingBlockWrites - 1),
+      }));
+    }
   },
 
   insertSibling: async (afterId, content = "") => {
