@@ -11,6 +11,9 @@ export default function App() {
   const graph = useGraphStore((s) => s.graph);
   const hydrate = useGraphStore((s) => s.hydrate);
   const pendingGraphReload = useRef(false);
+  const reloadInFlight = useRef(false);
+  const reloadTimer = useRef<number | null>(null);
+  const queuedReloadReason = useRef<string>("graph:changed");
 
   const shouldHoldGraphReload = () => {
     if (typeof document === "undefined") return false;
@@ -32,6 +35,44 @@ export default function App() {
     }
   };
 
+  const clearReloadTimer = () => {
+    if (reloadTimer.current !== null) {
+      window.clearTimeout(reloadTimer.current);
+      reloadTimer.current = null;
+    }
+  };
+
+  const scheduleReload = (reason: string) => {
+    queuedReloadReason.current = reason;
+    if (shouldHoldGraphReload()) {
+      pendingGraphReload.current = true;
+      return;
+    }
+    clearReloadTimer();
+    reloadTimer.current = window.setTimeout(async () => {
+      reloadTimer.current = null;
+      if (shouldHoldGraphReload()) {
+        pendingGraphReload.current = true;
+        return;
+      }
+      if (reloadInFlight.current) {
+        pendingGraphReload.current = true;
+        return;
+      }
+      reloadInFlight.current = true;
+      const runReason = queuedReloadReason.current;
+      try {
+        await reloadActiveGraphViews(runReason);
+      } finally {
+        reloadInFlight.current = false;
+        if (pendingGraphReload.current && !shouldHoldGraphReload()) {
+          pendingGraphReload.current = false;
+          scheduleReload("flush deferred graph:changed");
+        }
+      }
+    }, 250);
+  };
+
   useEffect(() => {
     hydrate();
   }, [hydrate]);
@@ -43,7 +84,7 @@ export default function App() {
       if (!pendingGraphReload.current) return;
       if (shouldHoldGraphReload()) return;
       pendingGraphReload.current = false;
-      reloadActiveGraphViews("flush deferred graph:changed").catch(() => {});
+      scheduleReload("flush deferred graph:changed");
     };
 
     const onFocusOut = () => {
@@ -58,6 +99,7 @@ export default function App() {
       }
     });
     return () => {
+      clearReloadTimer();
       window.removeEventListener("focusout", onFocusOut, true);
       window.removeEventListener("visibilitychange", flushDeferredReload);
       unsubscribePendingWrites();
@@ -77,10 +119,11 @@ export default function App() {
         });
         return;
       }
-      await reloadActiveGraphViews("apply graph:changed immediately");
+      scheduleReload("apply graph:changed immediately");
     });
     return () => {
       disposed = true;
+      clearReloadTimer();
       unlistenP.then((fn) => fn()).catch(() => {});
     };
   }, [graph]);
