@@ -210,6 +210,31 @@ jobs:
       - name: Initialize Android project
         run: npx tauri android init
 
+      - name: Inject Android runtime permissions
+        run: |
+          MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          if [ ! -f "$MANIFEST" ]; then
+            echo "AndroidManifest.xml not found at $MANIFEST"; exit 1
+          fi
+          # Add RECORD_AUDIO so in-app MediaRecorder can capture mic.
+          # Add READ_MEDIA_IMAGES / READ_MEDIA_AUDIO for picker access on Android 13+.
+          python3 - <<'PY'
+          import re, pathlib
+          p = pathlib.Path("src-tauri/gen/android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          perms = [
+              '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
+              '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
+              '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />',
+              '<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />',
+              '<uses-feature android:name="android.hardware.microphone" android:required="false" />',
+          ]
+          extra = "\n    " + "\n    ".join(p_ for p_ in perms if p_ not in s)
+          s = re.sub(r"(<manifest[^>]*>)", r"\1" + extra, s, count=1)
+          p.write_text(s)
+          print(s)
+          PY
+
       - name: Decode signing key (optional)
         env:
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}

@@ -110,60 +110,189 @@ export function MobileEditToolbar() {
     });
 
   const stopRecording = async () => {
-    /* legacy MediaRecorder path retained for future use; current
-       mobile flow uses the system recorder via a file input. */
+    /* placeholder retained for compatibility */
   };
   void stopRecording;
+
+  // Pick the best mime type supported by this WebView. Order matters:
+  // we prefer formats native <audio> can play back without transcoding.
+  const pickRecorderMime = (): string => {
+    const candidates = [
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/mp4",
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/ogg",
+    ];
+    if (typeof MediaRecorder === "undefined") return "";
+    for (const m of candidates) {
+      try {
+        if (MediaRecorder.isTypeSupported(m)) return m;
+      } catch {
+        /* ignore */
+      }
+    }
+    return "";
+  };
+
+  const extForMime = (mime: string): string => {
+    if (mime.includes("mp4")) return "m4a";
+    if (mime.includes("webm")) return "webm";
+    if (mime.includes("ogg")) return "ogg";
+    return "webm";
+  };
+
+  // Show a small modal with a stop button while MediaRecorder is
+  // running. Resolves true when the user taps Stop, false on Cancel.
+  const showStopDialog = (): { wait: Promise<boolean>; close: () => void } => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "perm-dialog-backdrop";
+    const dialog = document.createElement("div");
+    dialog.className = "perm-dialog";
+    dialog.innerHTML =
+      '<div class="perm-dialog-title">正在录音…</div>' +
+      '<div class="perm-dialog-desc">点击"停止"结束并保存到当前块。</div>' +
+      '<div class="perm-dialog-actions">' +
+      '<button class="perm-dialog-btn perm-dialog-cancel" type="button">取消</button>' +
+      '<button class="perm-dialog-btn perm-dialog-btn-primary perm-dialog-confirm" type="button">停止</button>' +
+      "</div>";
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+    let resolved = false;
+    let resolver: (v: boolean) => void = () => {};
+    const wait = new Promise<boolean>((resolve) => {
+      resolver = resolve;
+    });
+    const finish = (v: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      backdrop.remove();
+      resolver(v);
+    };
+    dialog
+      .querySelector(".perm-dialog-confirm")!
+      .addEventListener("click", () => finish(true));
+    dialog
+      .querySelector(".perm-dialog-cancel")!
+      .addEventListener("click", () => finish(false));
+    return { wait, close: () => finish(false) };
+  };
+
+  // Try in-app MediaRecorder. Throws on permission denial / unsupported.
+  const recordInApp = async (): Promise<{ blob: Blob; mime: string } | null> => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error("getUserMedia not available");
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = pickRecorderMime();
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop());
+      throw e;
+    }
+    const chunks: Blob[] = [];
+    recorder.addEventListener("dataavailable", (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    });
+    const stopped = new Promise<void>((resolve) => {
+      recorder.addEventListener("stop", () => resolve(), { once: true });
+    });
+    recorder.start();
+    const dlg = showStopDialog();
+    const ok = await dlg.wait;
+    try {
+      recorder.stop();
+    } catch {
+      /* ignore */
+    }
+    await stopped;
+    stream.getTracks().forEach((t) => t.stop());
+    if (!ok || chunks.length === 0) return null;
+    const finalMime = recorder.mimeType || mime || "audio/webm";
+    return { blob: new Blob(chunks, { type: finalMime }), mime: finalMime };
+  };
+
+  // Fallback: hand off to the system voice recorder via <input capture>.
+  const recordViaSystem = async (): Promise<File | null> => {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "audio/*";
+      input.setAttribute("capture", "microphone");
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      document.body.appendChild(input);
+      const cleanup = () => {
+        if (input.parentNode) input.remove();
+      };
+      input.addEventListener(
+        "change",
+        () => {
+          const f = input.files?.[0] ?? null;
+          cleanup();
+          resolve(f);
+        },
+        { once: true },
+      );
+      window.addEventListener(
+        "focus",
+        () => {
+          window.setTimeout(() => {
+            if (document.body.contains(input)) {
+              cleanup();
+              resolve(null);
+            }
+          }, 1500);
+        },
+        { once: true },
+      );
+      input.click();
+    });
+  };
 
   const onRecord = () =>
     guard("record", async () => {
       const ok = await confirmPermission({
         title: "申请录音权限",
-        description: "应用将打开系统录音机录制语音，并把录音文件插入当前块。",
-        details: "授权后，系统会启动录音应用；录音完成后返回应用即可。",
+        description: "应用将使用麦克风录制语音，并把录音直接保存到当前块。",
+        details: "首次使用时，系统会再次询问是否允许访问麦克风。",
         rememberKey: "microphone",
       });
       if (!ok) return;
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "audio/*";
-      // capture="microphone" tells the Android picker to launch the
-      // built-in voice recorder instead of the gallery — bypassing the
-      // need for the WebView to hold RECORD_AUDIO itself.
-      input.setAttribute("capture", "microphone");
-      input.style.position = "fixed";
-      input.style.left = "-9999px";
-      document.body.appendChild(input);
-      const file: File | null = await new Promise((resolve) => {
-        const cleanup = () => {
-          if (input.parentNode) input.remove();
-        };
-        input.addEventListener(
-          "change",
-          () => {
-            const f = input.files?.[0] ?? null;
-            cleanup();
-            resolve(f);
-          },
-          { once: true },
+
+      // Preferred path: in-app MediaRecorder so user taps Stop and the
+      // audio lands directly in the block.
+      try {
+        const result = await recordInApp();
+        if (!result) return;
+        const ext = extForMime(result.mime);
+        const ts = new Date()
+          .toISOString()
+          .replace(/[:.]/g, "-")
+          .slice(0, 19);
+        const fileName = `recording-${ts}.${ext}`;
+        const bytes = Array.from(
+          new Uint8Array(await result.blob.arrayBuffer()),
         );
-        window.addEventListener(
-          "focus",
-          () => {
-            window.setTimeout(() => {
-              if (document.body.contains(input)) {
-                cleanup();
-                resolve(null);
-              }
-            }, 1500);
-          },
-          { once: true },
-        );
-        input.click();
-      });
+        const ref = await api.importAudioBytes(fileName, bytes);
+        insertText(`\n![audio](${ref.rel_path})\n`);
+        await flushBeforeAction();
+        return;
+      } catch (err) {
+        logMobileDebug("mobile-toolbar.record.in-app-failed", String(err));
+      }
+
+      // Fallback: system recorder via file picker.
+      const file = await recordViaSystem();
       if (!file) return;
       const bytes = await readFileBytes(file);
-      const ref = await api.importAudioBytes(file.name || "recording.m4a", bytes);
+      const ref = await api.importAudioBytes(
+        file.name || "recording.m4a",
+        bytes,
+      );
       insertText(`\n![audio](${ref.rel_path})\n`);
       await flushBeforeAction();
     });

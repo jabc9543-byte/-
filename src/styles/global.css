@@ -4797,3 +4797,23 @@ input, textarea { font-family: inherit; color: inherit; }
   border-bottom: 1px solid var(--border);
   background: var(--bg-alt);
 }
+
+/* ---------- Mobile block frame: only visible while editing ---------- */
+.app-mobile .block-editor-stack {
+  position: relative;
+  min-height: 0;
+}
+/* Blurred state: preview drives layout, editor is an invisible
+   tap-overlay on top, no frame visible. */
+.app-mobile .block-editor-stack:not(:focus-within) .block-preview {
+  position: static;
+  padding: 6px 0;
+}
+.app-mobile .block-editor-stack:not(:focus-within) .block-editor {
+  position: absolute;
+  inset: 0;
+  border-color: transparent !important;
+  background: transparent !important;
+  min-height: 100%;
+  padding: 6px 0;
+}

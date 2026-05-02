@@ -27,6 +27,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<Map<number, HTMLDivElement>>(new Map());
+  const docRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pages, setPages] = useState<RenderedPage[]>([]);
   const [color, setColor] = useState<Color>("yellow");
   const [activeAnnotation, setActiveAnnotation] = useState<string | null>(null);
@@ -55,6 +56,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
     let loadingTask: pdfjsLib.PDFDocumentLoadingTask | null = null;
     (async () => {
       setPages([]);
+      docRef.current = null;
       const { api } = await import("../api");
       const bytes = await api.readPdfBytes(pdfId);
       if (cancelled) return;
@@ -62,33 +64,21 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
       loadingTask = pdfjsLib.getDocument({ data });
       const doc = await loadingTask.promise;
       if (cancelled) return;
+      docRef.current = doc;
       const dims: RenderedPage[] = [];
-      // Render each page so its width matches the container, with a
-      // small horizontal padding allowance.
       const targetWidth = Math.max(280, containerWidth - 16);
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
         const baseViewport = page.getViewport({ scale: 1 });
         const scale = targetWidth / baseViewport.width;
         const viewport = page.getViewport({ scale });
-        dims.push({ pageNumber: i, width: viewport.width, height: viewport.height });
-        // Render into its matching placeholder once the DOM exists.
-        queueMicrotask(() => {
-          const host = pagesRef.current.get(i);
-          if (!host || cancelled) return;
-          const canvas = host.querySelector("canvas") as HTMLCanvasElement | null;
-          if (!canvas) return;
-          const ratio = window.devicePixelRatio || 1;
-          canvas.width = viewport.width * ratio;
-          canvas.height = viewport.height * ratio;
-          canvas.style.width = viewport.width + "px";
-          canvas.style.height = viewport.height + "px";
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-          ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-          page.render({ canvasContext: ctx, viewport }).promise.catch(() => {});
+        dims.push({
+          pageNumber: i,
+          width: viewport.width,
+          height: viewport.height,
         });
       }
+      if (cancelled) return;
       setPages(dims);
     })().catch((e) => console.error("PDF load failed", e));
     return () => {
@@ -97,6 +87,59 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
       pagesRef.current.clear();
     };
   }, [pdfId, containerWidth]);
+
+  // Render canvases after pages state commits to the DOM. This is a
+  // separate effect because the previous queueMicrotask path raced
+  // ahead of React's commit and the canvas hosts didn't exist yet —
+  // resulting in blank pages on first load (especially on Android).
+  useEffect(() => {
+    const doc = docRef.current;
+    if (!doc || pages.length === 0) return;
+    let cancelled = false;
+    const renderTasks: Array<{ cancel: () => void }> = [];
+    (async () => {
+      const targetWidth = Math.max(280, containerWidth - 16);
+      for (const p of pages) {
+        if (cancelled) return;
+        const host = pagesRef.current.get(p.pageNumber);
+        if (!host) continue;
+        const canvas = host.querySelector("canvas") as
+          | HTMLCanvasElement
+          | null;
+        if (!canvas) continue;
+        const page = await doc.getPage(p.pageNumber);
+        if (cancelled) return;
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = targetWidth / baseViewport.width;
+        const viewport = page.getViewport({ scale });
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        canvas.style.width = viewport.width + "px";
+        canvas.style.height = viewport.height + "px";
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        const task = page.render({ canvasContext: ctx, viewport });
+        renderTasks.push(task);
+        try {
+          await task.promise;
+        } catch (err) {
+          if (!cancelled) console.error("PDF page render failed", p.pageNumber, err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      for (const t of renderTasks) {
+        try {
+          t.cancel();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, [pages, containerWidth]);
 
   // --- Drag-to-highlight ---
   const dragRef = useRef<{
