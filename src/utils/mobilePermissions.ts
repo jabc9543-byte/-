@@ -91,6 +91,31 @@ export async function requestFileAccess() {
   return files.length;
 }
 
+export async function pickGalleryImages(): Promise<File[]> {
+  const ok = await confirmPermission({
+    title: "申请图库访问",
+    description: "应用需要访问相册，用于在笔记中插入图片。",
+    details: "仅在你选择文件后才会读取，不会扫描整个相册。",
+    rememberKey: "gallery",
+  });
+  if (!ok) throw new PermissionDeniedError("图库");
+  return pickFiles("image/*", true);
+}
+
+export async function requestMicrophone(): Promise<MediaStream> {
+  const ok = await confirmPermission({
+    title: "申请录音权限",
+    description: "应用需要访问麦克风，用于在笔记中插入语音录音。",
+    details: "授权后，系统可能再次显示原生权限对话框。",
+    rememberKey: "microphone",
+  });
+  if (!ok) throw new PermissionDeniedError("麦克风");
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("当前环境不支持录音");
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: true });
+}
+
 export async function pickMarkdownFiles() {
   const ok = await confirmPermission({
     title: "导入 Markdown",

@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export type ThemeMode = "system" | "light" | "dark";
+
 export interface CollabSettings {
   enabled: boolean;
   serverUrl: string;
@@ -10,9 +12,12 @@ export interface CollabSettings {
 interface SettingsState {
   spellcheck: boolean;
   collab: CollabSettings;
+  theme: ThemeMode;
   toggleSpellcheck: () => void;
   setCollab: (patch: Partial<CollabSettings>) => void;
   toggleCollab: () => void;
+  setTheme: (mode: ThemeMode) => void;
+  cycleTheme: () => void;
 }
 
 const LS_KEY = "logseq-rs.settings";
@@ -38,17 +43,26 @@ function defaultCollab(): CollabSettings {
 interface Persisted {
   spellcheck: boolean;
   collab: CollabSettings;
+  theme: ThemeMode;
 }
 
 function load(): Persisted {
-  const fallback: Persisted = { spellcheck: true, collab: defaultCollab() };
+  const fallback: Persisted = {
+    spellcheck: true,
+    collab: defaultCollab(),
+    theme: "system",
+  };
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
+    const themeRaw = parsed.theme;
+    const theme: ThemeMode =
+      themeRaw === "light" || themeRaw === "dark" ? themeRaw : "system";
     return {
       spellcheck: parsed.spellcheck ?? true,
       collab: { ...defaultCollab(), ...(parsed.collab ?? {}) },
+      theme,
     };
   } catch {
     return fallback;
@@ -63,21 +77,47 @@ function persist(s: Persisted) {
   }
 }
 
+export function applyTheme(mode: ThemeMode) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (mode === "system") {
+    root.removeAttribute("data-theme");
+  } else {
+    root.setAttribute("data-theme", mode);
+  }
+}
+
+const initial = load();
+applyTheme(initial.theme);
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  ...load(),
+  ...initial,
   toggleSpellcheck: () => {
     const next = !get().spellcheck;
     set({ spellcheck: next });
-    persist({ spellcheck: next, collab: get().collab });
+    persist({ spellcheck: next, collab: get().collab, theme: get().theme });
   },
   setCollab: (patch) => {
     const next = { ...get().collab, ...patch };
     set({ collab: next });
-    persist({ spellcheck: get().spellcheck, collab: next });
+    persist({ spellcheck: get().spellcheck, collab: next, theme: get().theme });
   },
   toggleCollab: () => {
     const next = { ...get().collab, enabled: !get().collab.enabled };
     set({ collab: next });
-    persist({ spellcheck: get().spellcheck, collab: next });
+    persist({ spellcheck: get().spellcheck, collab: next, theme: get().theme });
+  },
+  setTheme: (mode) => {
+    set({ theme: mode });
+    applyTheme(mode);
+    persist({ spellcheck: get().spellcheck, collab: get().collab, theme: mode });
+  },
+  cycleTheme: () => {
+    const order: ThemeMode[] = ["system", "light", "dark"];
+    const cur = get().theme;
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    set({ theme: next });
+    applyTheme(next);
+    persist({ spellcheck: get().spellcheck, collab: get().collab, theme: next });
   },
 }));

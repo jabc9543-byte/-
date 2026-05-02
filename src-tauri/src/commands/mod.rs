@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod backup;
 pub mod ai;
 pub mod block;

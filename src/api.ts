@@ -167,6 +167,18 @@ export const api = {
   // dashboard (module 25)
   dashboardStats: () => invoke<DashboardStats>("dashboard_stats"),
 
+  // assets (image/audio for mobile editor)
+  importImageBytes: (name: string, bytes: number[]) =>
+    invoke<{ id: string; rel_path: string }>("import_image_bytes", {
+      name,
+      bytes,
+    }),
+  importAudioBytes: (name: string, bytes: number[]) =>
+    invoke<{ id: string; rel_path: string }>("import_audio_bytes", {
+      name,
+      bytes,
+    }),
+
   // pdf + zotero
   importPdf: (srcPath: string) =>
     invoke<PdfAsset>("import_pdf", { srcPath }),
