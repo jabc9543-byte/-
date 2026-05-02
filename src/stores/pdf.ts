@@ -8,6 +8,7 @@ interface PdfState {
   refresh: () => Promise<void>;
   open: (id: string | null) => Promise<void>;
   importFile: (path: string) => Promise<PdfAsset>;
+  importBytes: (name: string, bytes: Uint8Array) => Promise<PdfAsset>;
   remove: (id: string) => Promise<void>;
   loadAnnotations: (id: string) => Promise<void>;
   addAnnotation: (a: PdfAnnotation) => Promise<void>;
@@ -37,6 +38,12 @@ export const usePdfStore = create<PdfState>((set, get) => ({
 
   importFile: async (path) => {
     const asset = await api.importPdf(path);
+    await get().refresh();
+    return asset;
+  },
+
+  importBytes: async (name, bytes) => {
+    const asset = await api.importPdfBytes(name, Array.from(bytes));
     await get().refresh();
     return asset;
   },

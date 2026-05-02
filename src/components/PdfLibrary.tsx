@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { usePdfStore } from "../stores/pdf";
 import { PdfViewer } from "./PdfViewer";
 
@@ -8,27 +7,29 @@ export function PdfLibrary({ onClose }: { onClose: () => void }) {
   const activeId = usePdfStore((s) => s.activeId);
   const refresh = usePdfStore((s) => s.refresh);
   const openPdf = usePdfStore((s) => s.open);
-  const importFile = usePdfStore((s) => s.importFile);
+  const importBytes = usePdfStore((s) => s.importBytes);
   const remove = usePdfStore((s) => s.remove);
   const importZotero = usePdfStore((s) => s.importZotero);
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>("");
   const bibInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
 
-  const onPickPdf = async () => {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "PDF", extensions: ["pdf"] }],
-    });
-    if (!selected || typeof selected !== "string") return;
+  const onPickPdf = () => pdfInputRef.current?.click();
+
+  const onPdfSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
     setBusy(true);
     try {
-      const asset = await importFile(selected);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const asset = await importBytes(file.name, bytes);
       await openPdf(asset.id);
       setStatus(`已导入 ${asset.name}`);
     } catch (e) {
@@ -68,6 +69,13 @@ export function PdfLibrary({ onClose }: { onClose: () => void }) {
         <div className="pdf-library-actions">
           <button disabled={busy} onClick={onPickPdf}>📄 导入 PDF…</button>
           <button disabled={busy} onClick={onPickBib}>📚 导入 BibTeX…</button>
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            style={{ display: "none" }}
+            onChange={onPdfSelected}
+          />
           <input
             ref={bibInputRef}
             type="file"

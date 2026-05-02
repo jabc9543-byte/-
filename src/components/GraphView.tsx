@@ -12,6 +12,7 @@ import { api } from "../api";
 import type { GraphStats } from "../types";
 import { usePageStore } from "../stores/page";
 import { useWhiteboardStore } from "../stores/whiteboard";
+import { useIsTouch } from "../hooks/useMediaQuery";
 
 interface SimNode extends SimulationNodeDatum {
   id: string;
@@ -41,6 +42,7 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [stats, setStats] = useState<GraphStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isTouch = useIsTouch();
   const openPage = usePageStore((s) => s.openPage);
   const showPage = useWhiteboardStore((s) => s.showPage);
 
@@ -191,12 +193,18 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
           ctx.strokeStyle = "#059669";
           ctx.stroke();
         }
-        if (isFocus || isHover || n.r > 10) {
+        if (isTouch || isFocus || isHover || n.r > 10) {
           ctx.fillStyle = "rgba(20,20,30,0.9)";
-          ctx.font = `${Math.max(10, Math.min(14, 9 + n.r / 4))}px system-ui, sans-serif`;
+          const fontSize = isTouch
+            ? Math.max(9, Math.min(12, 8 + n.r / 4))
+            : Math.max(10, Math.min(14, 9 + n.r / 4));
+          ctx.font = `${fontSize}px system-ui, sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "top";
-          ctx.fillText(n.name, n.x!, n.y! + n.r + 2);
+          const label = isTouch && n.name.length > 12
+            ? `${n.name.slice(0, 12)}…`
+            : n.name;
+          ctx.fillText(label, n.x!, n.y! + n.r + 2);
         }
       }
       ctx.restore();
@@ -214,10 +222,7 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
       return null;
     };
 
-    const onMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
+    const onMoveAt = (px: number, py: number) => {
       if (draggingNode) {
         const { x, y } = toWorld(px, py);
         draggingNode.fx = x;
@@ -231,11 +236,13 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
       if (prev !== hoverNode) draw();
     };
 
-    let panStart: { x: number; y: number; camX: number; camY: number } | null = null;
-    const onDown = (e: MouseEvent) => {
+    const onMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
+      onMoveAt(e.clientX - rect.left, e.clientY - rect.top);
+    };
+
+    let panStart: { x: number; y: number; camX: number; camY: number } | null = null;
+    const onDownAt = (px: number, py: number) => {
       const n = findNode(px, py);
       if (n) {
         draggingNode = n;
@@ -245,7 +252,11 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
         panStart = { x: px, y: py, camX, camY };
       }
     };
-    const onUp = (e: MouseEvent) => {
+    const onDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      onDownAt(e.clientX - rect.left, e.clientY - rect.top);
+    };
+    const onUpAt = (px: number, py: number) => {
       if (draggingNode) {
         const node = draggingNode;
         draggingNode = null;
@@ -256,9 +267,6 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
           node.fy = null;
         }, 800);
       } else if (panStart) {
-        const rect = canvas.getBoundingClientRect();
-        const px = e.clientX - rect.left;
-        const py = e.clientY - rect.top;
         const moved = Math.hypot(px - panStart.x, py - panStart.y);
         if (moved < 4) {
           const clicked = findNode(px, py);
@@ -270,12 +278,47 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
         panStart = null;
       }
     };
+    const onUp = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      onUpAt(e.clientX - rect.left, e.clientY - rect.top);
+    };
     const onPan = (e: MouseEvent) => {
       if (!panStart) return;
       const rect = canvas.getBoundingClientRect();
       camX = panStart.camX + (e.clientX - rect.left - panStart.x);
       camY = panStart.camY + (e.clientY - rect.top - panStart.y);
       draw();
+    };
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      onDownAt(touch.clientX - rect.left, touch.clientY - rect.top);
+      e.preventDefault();
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const px = touch.clientX - rect.left;
+      const py = touch.clientY - rect.top;
+      if (draggingNode) {
+        onMoveAt(px, py);
+      } else if (panStart) {
+        camX = panStart.camX + (px - panStart.x);
+        camY = panStart.camY + (py - panStart.y);
+        draw();
+      } else {
+        onMoveAt(px, py);
+      }
+      e.preventDefault();
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      const rect = canvas.getBoundingClientRect();
+      onUpAt(touch.clientX - rect.left, touch.clientY - rect.top);
+      e.preventDefault();
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -294,6 +337,9 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
     canvas.addEventListener("mousemove", onPan);
     canvas.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("wheel", onWheel, { passive: false });
     const onResize = () => {
       resize();
@@ -308,10 +354,13 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
       canvas.removeEventListener("mousemove", onPan);
       canvas.removeEventListener("mousedown", onDown);
       window.removeEventListener("mouseup", onUp);
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
       canvas.removeEventListener("wheel", onWheel);
       window.removeEventListener("resize", onResize);
     };
-  }, [stats, openPage, showPage, focusPageId, focusDepth]);
+  }, [stats, openPage, showPage, focusPageId, focusDepth, isTouch]);
 
   if (error) return <div className="graph-error">图谱加载出错：{error}</div>;
   if (!stats)

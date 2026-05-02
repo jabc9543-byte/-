@@ -118,6 +118,36 @@ pub async fn import_pdf(
     let filename = format!("{id}.pdf");
     let dest = pdf_dir(&state)?.join(&filename);
     fs::copy(&src, &dest)?;
+    build_pdf_asset(state.inner(), id, filename, name)
+}
+
+#[tauri::command]
+pub async fn import_pdf_bytes(
+    name: String,
+    bytes: Vec<u8>,
+    state: State<'_, AppState>,
+) -> AppResult<PdfAsset> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Invalid("pdf name cannot be empty".into()));
+    }
+    if bytes.is_empty() {
+        return Err(AppError::Invalid("pdf bytes cannot be empty".into()));
+    }
+    let id = nanoid::nanoid!(12);
+    let filename = format!("{id}.pdf");
+    let dest = pdf_dir(&state)?.join(&filename);
+    fs::write(&dest, bytes)?;
+    build_pdf_asset(state.inner(), id, filename, trimmed.to_string())
+}
+
+fn build_pdf_asset(
+    state: &AppState,
+    id: String,
+    filename: String,
+    name: String,
+) -> AppResult<PdfAsset> {
+    let dest = pdf_dir(state)?.join(&filename);
     let size = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
     let asset = PdfAsset {
         id: id.clone(),
@@ -126,9 +156,9 @@ pub async fn import_pdf(
         size,
         added_at: Utc::now().to_rfc3339(),
     };
-    let mut idx = read_index(&state)?;
+    let mut idx = read_index(state)?;
     idx.push(asset.clone());
-    write_index(&state, &idx)?;
+    write_index(state, &idx)?;
     Ok(asset)
 }
 

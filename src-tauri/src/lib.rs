@@ -118,6 +118,7 @@ pub fn run() {
             commands::marketplace::fetch_marketplace,
             commands::marketplace::install_plugin_from_url,
             commands::pdf::import_pdf,
+            commands::pdf::import_pdf_bytes,
             commands::pdf::list_pdfs,
             commands::pdf::read_pdf_bytes,
             commands::pdf::delete_pdf,

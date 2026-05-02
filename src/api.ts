@@ -170,6 +170,8 @@ export const api = {
   // pdf + zotero
   importPdf: (srcPath: string) =>
     invoke<PdfAsset>("import_pdf", { srcPath }),
+  importPdfBytes: (name: string, bytes: number[]) =>
+    invoke<PdfAsset>("import_pdf_bytes", { name, bytes }),
   listPdfs: () => invoke<PdfAsset[]>("list_pdfs"),
   readPdfBytes: (id: string) => invoke<number[]>("read_pdf_bytes", { id }),
   deletePdf: (id: string) => invoke<void>("delete_pdf", { id }),
