@@ -178,6 +178,8 @@ export const api = {
       name,
       bytes,
     }),
+  readAssetBytes: (relPath: string) =>
+    invoke<number[]>("read_asset_bytes", { relPath }),
 
   // pdf + zotero
   importPdf: (srcPath: string) =>

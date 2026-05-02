@@ -97,3 +97,28 @@ pub async fn import_audio_bytes(
     let rel = write_asset(&state, "audio", &id, &ext, &bytes)?;
     Ok(AssetRef { id, rel_path: rel })
 }
+
+/// Read raw bytes for any asset stored under `<graph_root>/assets/`.
+/// Used by the renderer to materialise images/audio as blob URLs on
+/// platforms (Android WebView) where the custom asset protocol isn't
+/// available.
+#[tauri::command]
+pub async fn read_asset_bytes(
+    rel_path: String,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<u8>> {
+    // Reject path traversal: only allow `assets/<sub>/<file>` with no
+    // back-references.
+    let clean = rel_path.replace('\\', "/");
+    if clean.contains("..") || clean.starts_with('/') {
+        return Err(AppError::Invalid("invalid asset path".into()));
+    }
+    if !clean.starts_with("assets/") {
+        return Err(AppError::Invalid("asset path must be under assets/".into()));
+    }
+    let path = graph_root(&state)?.join(&clean);
+    if !path.is_file() {
+        return Err(AppError::NotFound(rel_path));
+    }
+    Ok(fs::read(path)?)
+}

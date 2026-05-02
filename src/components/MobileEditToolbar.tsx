@@ -6,10 +6,8 @@ import {
   getActiveMobileEditor,
   subscribeMobileEditor,
 } from "../utils/mobileEditor";
-import {
-  pickGalleryImages,
-  requestMicrophone,
-} from "../utils/mobilePermissions";
+import { pickGalleryImages } from "../utils/mobilePermissions";
+import { confirmPermission } from "../utils/permissionConfirm";
 import { api } from "../api";
 import { logMobileDebug } from "../utils/mobileDebug";
 
@@ -30,10 +28,6 @@ async function readFileBytes(file: File): Promise<number[]> {
 export function MobileEditToolbar() {
   const isTouch = useIsTouch();
   const [editor, setEditor] = useState(getActiveMobileEditor());
-  const [recording, setRecording] = useState(false);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const recorderStreamRef = useRef<MediaStream | null>(null);
-  const recorderChunksRef = useRef<Blob[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const theme = useSettingsStore((s) => s.theme);
   const cycleTheme = useSettingsStore((s) => s.cycleTheme);
@@ -116,78 +110,62 @@ export function MobileEditToolbar() {
     });
 
   const stopRecording = async () => {
-    const rec = recorderRef.current;
-    const stream = recorderStreamRef.current;
-    if (!rec) return;
-    await new Promise<void>((resolve) => {
-      rec.addEventListener(
-        "stop",
-        async () => {
-          try {
-            const blob = new Blob(recorderChunksRef.current, {
-              type: rec.mimeType || "audio/webm",
-            });
-            const buf = await blob.arrayBuffer();
-            const mime = rec.mimeType || "audio/webm";
-            const ext = mime.includes("ogg")
-              ? "ogg"
-              : mime.includes("mp4")
-                ? "mp4"
-                : "webm";
-            const ref = await api.importAudioBytes(
-              `recording.${ext}`,
-              Array.from(new Uint8Array(buf)),
-            );
-            insertText(`\n![audio](${ref.rel_path})\n`);
-            await flushBeforeAction();
-          } catch (err) {
-            logMobileDebug("mobile-toolbar.error", "audio.save", {
-              error: String(err),
-            });
-          } finally {
-            resolve();
-          }
-        },
-        { once: true },
-      );
-      rec.stop();
-    });
-    stream?.getTracks().forEach((t) => t.stop());
-    recorderRef.current = null;
-    recorderStreamRef.current = null;
-    recorderChunksRef.current = [];
-    setRecording(false);
+    /* legacy MediaRecorder path retained for future use; current
+       mobile flow uses the system recorder via a file input. */
   };
+  void stopRecording;
 
-  const onToggleRecord = () =>
-    guard("toggleRecord", async () => {
-      if (recording) {
-        await stopRecording();
-        return;
-      }
-      const stream = await requestMicrophone();
-      const candidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/ogg;codecs=opus",
-        "audio/mp4",
-      ];
-      const supported = candidates.find(
-        (m) =>
-          typeof MediaRecorder !== "undefined" &&
-          MediaRecorder.isTypeSupported?.(m),
-      );
-      const rec = supported
-        ? new MediaRecorder(stream, { mimeType: supported })
-        : new MediaRecorder(stream);
-      recorderChunksRef.current = [];
-      rec.addEventListener("dataavailable", (e) => {
-        if (e.data && e.data.size > 0) recorderChunksRef.current.push(e.data);
+  const onRecord = () =>
+    guard("record", async () => {
+      const ok = await confirmPermission({
+        title: "申请录音权限",
+        description: "应用将打开系统录音机录制语音，并把录音文件插入当前块。",
+        details: "授权后，系统会启动录音应用；录音完成后返回应用即可。",
+        rememberKey: "microphone",
       });
-      recorderRef.current = rec;
-      recorderStreamRef.current = stream;
-      rec.start();
-      setRecording(true);
+      if (!ok) return;
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "audio/*";
+      // capture="microphone" tells the Android picker to launch the
+      // built-in voice recorder instead of the gallery — bypassing the
+      // need for the WebView to hold RECORD_AUDIO itself.
+      input.setAttribute("capture", "microphone");
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      document.body.appendChild(input);
+      const file: File | null = await new Promise((resolve) => {
+        const cleanup = () => {
+          if (input.parentNode) input.remove();
+        };
+        input.addEventListener(
+          "change",
+          () => {
+            const f = input.files?.[0] ?? null;
+            cleanup();
+            resolve(f);
+          },
+          { once: true },
+        );
+        window.addEventListener(
+          "focus",
+          () => {
+            window.setTimeout(() => {
+              if (document.body.contains(input)) {
+                cleanup();
+                resolve(null);
+              }
+            }, 1500);
+          },
+          { once: true },
+        );
+        input.click();
+      });
+      if (!file) return;
+      const bytes = await readFileBytes(file);
+      const ref = await api.importAudioBytes(file.name || "recording.m4a", bytes);
+      insertText(`\n![audio](${ref.rel_path})\n`);
+      await flushBeforeAction();
     });
 
   const themeIcon = theme === "dark" ? "☀" : theme === "light" ? "🖥" : "🌙";
@@ -263,14 +241,14 @@ export function MobileEditToolbar() {
       </button>
       <button
         type="button"
-        className={`mobile-edit-btn${recording ? " mobile-edit-btn-recording" : ""}`}
+        className="mobile-edit-btn"
         onPointerDown={keepFocus}
         onMouseDown={keepFocus}
-        onClick={onToggleRecord}
-        aria-label={recording ? "停止录音" : "开始录音"}
-        title={recording ? "停止录音" : "录音"}
+        onClick={onRecord}
+        aria-label="录音"
+        title="录音（系统录音机）"
       >
-        {recording ? "⏺" : "🎤"}
+        🎤
       </button>
       <button
         type="button"

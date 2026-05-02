@@ -30,6 +30,24 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
   const [pages, setPages] = useState<RenderedPage[]>([]);
   const [color, setColor] = useState<Color>("yellow");
   const [activeAnnotation, setActiveAnnotation] = useState<string | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(() =>
+    typeof window === "undefined" ? 800 : window.innerWidth,
+  );
+
+  // Track the visible width of the PDF column so each page can be
+  // rendered at the correct scale (especially important on phones).
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    const update = () => {
+      const w = node.clientWidth;
+      if (w > 0) setContainerWidth(w);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, []);
 
   // Load PDF from Rust backend as bytes.
   useEffect(() => {
@@ -45,9 +63,14 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
       const doc = await loadingTask.promise;
       if (cancelled) return;
       const dims: RenderedPage[] = [];
+      // Render each page so its width matches the container, with a
+      // small horizontal padding allowance.
+      const targetWidth = Math.max(280, containerWidth - 16);
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i);
-        const viewport = page.getViewport({ scale: 1.3 });
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = targetWidth / baseViewport.width;
+        const viewport = page.getViewport({ scale });
         dims.push({ pageNumber: i, width: viewport.width, height: viewport.height });
         // Render into its matching placeholder once the DOM exists.
         queueMicrotask(() => {
@@ -73,7 +96,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
       loadingTask?.destroy().catch(() => {});
       pagesRef.current.clear();
     };
-  }, [pdfId]);
+  }, [pdfId, containerWidth]);
 
   // --- Drag-to-highlight ---
   const dragRef = useRef<{
@@ -84,8 +107,8 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
   } | null>(null);
 
   const onMouseDown = useCallback(
-    (e: React.MouseEvent, pageNumber: number) => {
-      if (e.button !== 0 || e.target !== e.currentTarget) return;
+    (e: React.PointerEvent, pageNumber: number) => {
+      if (e.target !== e.currentTarget) return;
       const host = e.currentTarget as HTMLDivElement;
       const box = host.getBoundingClientRect();
       const startX = e.clientX - box.left;
@@ -96,12 +119,17 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
       rect.style.top = startY + "px";
       host.appendChild(rect);
       dragRef.current = { page: pageNumber, startX, startY, rect };
+      try {
+        host.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
     },
     [],
   );
 
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || !d.rect) return;
       const host = pagesRef.current.get(d.page);
@@ -154,11 +182,13 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
       addAnnotation(annotation);
       setActiveAnnotation(annotation.id);
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [addAnnotation, color, pages]);
 
@@ -196,7 +226,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
             }}
             className="pdf-page"
             style={{ width: p.width, height: p.height }}
-            onMouseDown={(e) => onMouseDown(e, p.pageNumber)}
+            onPointerDown={(e) => onMouseDown(e, p.pageNumber)}
           >
             <canvas />
             {(byPage.get(p.pageNumber) ?? []).map((a) =>
@@ -210,7 +240,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
                     width: (r.w / 100) * p.width,
                     height: (r.h / 100) * p.height,
                   }}
-                  onMouseDown={(e) => {
+                  onPointerDown={(e) => {
                     e.stopPropagation();
                     setActiveAnnotation(a.id);
                   }}

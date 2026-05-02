@@ -119,6 +119,7 @@ pub fn run() {
             commands::marketplace::install_plugin_from_url,
             commands::assets::import_image_bytes,
             commands::assets::import_audio_bytes,
+            commands::assets::read_asset_bytes,
             commands::pdf::import_pdf,
             commands::pdf::import_pdf_bytes,
             commands::pdf::list_pdfs,

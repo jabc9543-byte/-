@@ -60,7 +60,7 @@ export function PdfLibrary({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="pdf-library">
+    <div className={`pdf-library${activeId ? " has-active" : ""}`}>
       <div className="pdf-library-sidebar">
         <div className="pdf-library-header">
           <strong>PDF / Zotero</strong>
@@ -119,7 +119,20 @@ export function PdfLibrary({ onClose }: { onClose: () => void }) {
       </div>
       <div className="pdf-library-main">
         {activeId ? (
-          <PdfViewer pdfId={activeId} />
+          <>
+            <div className="pdf-library-main-header">
+              <button
+                type="button"
+                className="pdf-viewer-back"
+                onClick={() => openPdf(null)}
+                title="返回列表"
+                aria-label="返回列表"
+              >
+                ←
+              </button>
+            </div>
+            <PdfViewer pdfId={activeId} />
+          </>
         ) : (
           <div className="pdf-library-placeholder">
             请在左侧选择一个 PDF，或导入新文件。
