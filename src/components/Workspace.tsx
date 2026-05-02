@@ -22,6 +22,7 @@ import { AiPanel } from "./AiPanel";
 import { HelpPanel } from "./HelpPanel";
 import { MobileDebugPanel } from "./MobileDebugPanel";
 import { MobileEditToolbar } from "./MobileEditToolbar";
+import { RecordingOverlay } from "./RecordingOverlay";
 import { PermissionDialogHost } from "./PermissionDialogHost";
 import { usePageStore } from "../stores/page";
 import { useWhiteboardStore } from "../stores/whiteboard";
@@ -520,6 +521,7 @@ export function Workspace() {
       )}
       {isMobile && <MobileDebugPanel />}
       {isMobile && <MobileEditToolbar />}
+      {isMobile && <RecordingOverlay />}
       <PermissionDialogHost />
       <CollabPresence />
       <CommentsInboxToggle />

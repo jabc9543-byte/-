@@ -4890,6 +4890,18 @@ input, textarea { font-family: inherit; color: inherit; }
   touch-action: none;
 }
 .pdf-pages-pen .pdf-page { cursor: crosshair; }
+/* Highlight (rect) and eraser also lock page scroll, so the finger
+   drag actually produces a rectangle / eraser hit instead of being
+   swallowed by the scroller. */
+.pdf-pages-rect, .pdf-pages-rect .pdf-page { touch-action: none; }
+.pdf-pages-rect .pdf-page { cursor: crosshair; }
+.pdf-pages-eraser, .pdf-pages-eraser .pdf-page { touch-action: none; }
+.pdf-pages-eraser .pdf-page,
+.pdf-pages-eraser .pdf-highlight,
+.pdf-pages-eraser .pdf-stroke-layer { cursor: not-allowed; }
+/* Move tool: scrolling is the whole point. */
+.pdf-pages-move, .pdf-pages-move .pdf-page { touch-action: pan-y; }
+.pdf-pages-move .pdf-page { cursor: grab; }
 .pdf-pen-live { z-index: 5; }
 .pdf-stroke-layer { z-index: 4; }
 .pdf-stroke-layer.active polyline { filter: drop-shadow(0 0 2px rgba(0,0,0,0.4)); }
@@ -4936,4 +4948,41 @@ input, textarea { font-family: inherit; color: inherit; }
   pointer-events: auto;
   position: relative;
   z-index: 2;
+}
+/* ---------- Global recording overlay (mobile) ---------- */
+.recording-overlay {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  background: var(--bg-alt, #fff);
+  color: var(--fg, #000);
+  border: 1px solid var(--border, #ccc);
+  border-radius: 999px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  pointer-events: auto;
+}
+.recording-overlay .recording-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d33;
+  display: inline-block;
+}
+.recording-overlay .recording-dot.is-live { animation: rec-blink 1s steps(2, end) infinite; }
+@keyframes rec-blink { 50% { opacity: 0.25; } }
+.recording-overlay .recording-label { font-size: 14px; font-variant-numeric: tabular-nums; }
+.recording-overlay .recording-stop {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #d33;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
 }

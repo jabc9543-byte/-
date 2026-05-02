@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { nanoid } from "nanoid";
 import { usePageStore } from "../stores/page";
 import { useSettingsStore } from "../stores/settings";
 import { useIsTouch } from "../hooks/useMediaQuery";
@@ -122,36 +121,35 @@ export function MobileEditToolbar() {
       await flushBeforeAction();
     });
 
-  // Replace `placeholder` (the `recording://...` token in the block
-  // text) with the saved audio reference. We re-read the latest block
-  // content from the store so concurrent edits aren't clobbered.
-  const replacePlaceholder = async (
-    targetBlockId: string,
-    placeholder: string,
-    replacement: string,
-  ) => {
+  // Append `extra` text to the target block's current content via the
+  // store. If the target block's textarea is currently focused (the
+  // common case — user hit the mic button without leaving the block),
+  // we ALSO patch the textarea's DOM value in place, so the focused
+  // editor's later onBlur save can't clobber what we just appended.
+  const appendToBlock = async (targetBlockId: string, extra: string) => {
+    const cur = getActiveMobileEditor();
+    if (cur && cur.blockId === targetBlockId) {
+      const ta = cur.textarea;
+      const baseValue = ta.value;
+      const sep =
+        baseValue.length === 0 || baseValue.endsWith("\n") ? "" : "\n";
+      const next = `${baseValue}${sep}${extra}`;
+      const selStart = ta.selectionStart;
+      const selEnd = ta.selectionEnd;
+      ta.value = next;
+      ta.selectionStart = selStart;
+      ta.selectionEnd = selEnd;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      await usePageStore.getState().updateBlock(targetBlockId, next);
+      return;
+    }
     const block = usePageStore.getState().blocks.find(
       (b) => b.id === targetBlockId,
     );
     if (!block) return;
-    if (!block.content.includes(placeholder)) return;
-    const next = block.content.replace(placeholder, replacement);
-    await usePageStore.getState().updateBlock(targetBlockId, next);
-  };
-
-  // Append `placeholder` to the block's current content (used right
-  // after we successfully start the recorder).
-  const appendPlaceholder = async (
-    targetBlockId: string,
-    placeholder: string,
-  ) => {
-    await flushBeforeAction();
-    const block = usePageStore.getState().blocks.find(
-      (b) => b.id === targetBlockId,
-    );
-    if (!block) return;
-    const sep = block.content.length === 0 || block.content.endsWith("\n") ? "" : "\n";
-    const next = `${block.content}${sep}${placeholder}\n`;
+    const sep =
+      block.content.length === 0 || block.content.endsWith("\n") ? "" : "\n";
+    const next = `${block.content}${sep}${extra}`;
     await usePageStore.getState().updateBlock(targetBlockId, next);
   };
 
@@ -195,8 +193,8 @@ export function MobileEditToolbar() {
 
   const onRecord = () =>
     guard("record", async () => {
-      // Stop is handled inline by the RecordingBar inside the block,
-      // not by this button — so the mic just starts new recordings.
+      // Stop is handled by the global RecordingOverlay, not by this
+      // button — so the mic just starts new recordings.
       if (recording) return;
 
       const ok = await confirmPermission({
@@ -207,10 +205,15 @@ export function MobileEditToolbar() {
       });
       if (!ok) return;
 
-      const recordingId = nanoid(10);
-      const placeholder = `![audio recording](recording://${recordingId})`;
+      // Snapshot the target block before we start recording: by the
+      // time the user taps stop the textarea may have blurred and the
+      // active editor may be gone, but the block id is fixed.
       const targetBlockId = blockId;
+      // Persist any pending typing into the store first so we don't
+      // lose it when we later append the audio ref.
+      await flushBeforeAction();
 
+      const recordingId = `rec-${Date.now()}`;
       try {
         await beginRecording(recordingId, async (blob, mime) => {
           const ext = extForMime(mime);
@@ -221,13 +224,11 @@ export function MobileEditToolbar() {
           const fileName = `recording-${ts}.${ext}`;
           const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
           const ref = await api.importAudioBytes(fileName, bytes);
-          await replacePlaceholder(
+          await appendToBlock(
             targetBlockId,
-            placeholder,
-            `![audio](${ref.rel_path})`,
+            `\n![audio](${ref.rel_path})\n`,
           );
         });
-        await appendPlaceholder(targetBlockId, placeholder);
         logMobileDebug("mobile-toolbar.record.started", recordingId);
         return;
       } catch (err) {
@@ -242,8 +243,7 @@ export function MobileEditToolbar() {
         file.name || "recording.m4a",
         bytes,
       );
-      insertText(`\n![audio](${ref.rel_path})\n`);
-      await flushBeforeAction();
+      await appendToBlock(targetBlockId, `\n![audio](${ref.rel_path})\n`);
     });
 
   const themeIcon = theme === "dark" ? "☀" : theme === "light" ? "🖥" : "🌙";

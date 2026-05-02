@@ -23,7 +23,7 @@ const COLOR_HEX: Record<Color, string> = {
   orange: "#ff8c42",
 };
 
-type Tool = "pen" | "rect";
+type Tool = "pen" | "rect" | "eraser" | "move";
 
 interface RenderedPage {
   pageNumber: number;
@@ -44,6 +44,10 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
   const [color, setColor] = useState<Color>("yellow");
   const [tool, setTool] = useState<Tool>("pen");
   const [activeAnnotation, setActiveAnnotation] = useState<string | null>(null);
+  // Stack of annotation ids we created in this session, so the undo
+  // button can pop the most-recent one. Survives only as long as the
+  // viewer is mounted; per-document persistence stays on disk.
+  const undoStackRef = useRef<string[]>([]);
   const [containerWidth, setContainerWidth] = useState<number>(() =>
     typeof window === "undefined" ? 800 : window.innerWidth,
   );
@@ -182,6 +186,13 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
 
   const onMouseDown = useCallback(
     (e: React.PointerEvent, pageNumber: number) => {
+      // Move tool: do nothing — let the pages list scroll naturally.
+      if (toolRef.current === "move") return;
+      // Eraser tool: if the tap landed on an annotation element it
+      // already called stopPropagation; if it landed on the page
+      // canvas, do nothing (nothing to erase). We rely on the
+      // overlay's own onPointerDown to handle the deletion.
+      if (toolRef.current === "eraser") return;
       // Allow drags that start on the page itself, on its child
       // canvas, or on existing pen-stroke svg layers (which are
       // pointer-events: none, but defensive). Highlight rectangles
@@ -317,6 +328,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
           created_at: new Date().toISOString(),
         };
         addAnnotation(annotation);
+        undoStackRef.current.push(annotation.id);
         setActiveAnnotation(annotation.id);
       } else {
         d.svg.remove();
@@ -340,6 +352,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
           created_at: new Date().toISOString(),
         };
         addAnnotation(annotation);
+        undoStackRef.current.push(annotation.id);
       }
     };
     window.addEventListener("pointermove", onMove);
@@ -362,6 +375,25 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
     return m;
   }, [annotations]);
 
+  const onUndo = () => {
+    while (undoStackRef.current.length > 0) {
+      const id = undoStackRef.current.pop()!;
+      if (annotations.some((a) => a.id === id)) {
+        removeAnnotation(id);
+        if (activeAnnotation === id) setActiveAnnotation(null);
+        return;
+      }
+    }
+  };
+
+  // Erase any annotation by id (used by both eraser tool and the
+  // delete button in the editor panel).
+  const eraseAnnotation = (id: string) => {
+    removeAnnotation(id);
+    if (activeAnnotation === id) setActiveAnnotation(null);
+    undoStackRef.current = undoStackRef.current.filter((x) => x !== id);
+  };
+
   return (
     <div className={`pdf-viewer pdf-tool-${tool}`}>
       <div className="pdf-toolbar">
@@ -372,7 +404,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
           title="画笔（在 PDF 上自由绘制；启用时不能滑动页面）"
           aria-label="画笔"
         >
-          🖊 画笔
+          🖊
         </button>
         <button
           type="button"
@@ -381,7 +413,35 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
           title="矩形高亮"
           aria-label="矩形高亮"
         >
-          ▭ 高亮
+          ▭
+        </button>
+        <button
+          type="button"
+          className={`pdf-tool-btn${tool === "eraser" ? " active" : ""}`}
+          onClick={() => setTool("eraser")}
+          title="橡皮（点击批注以删除）"
+          aria-label="橡皮"
+        >
+          🧽
+        </button>
+        <button
+          type="button"
+          className={`pdf-tool-btn${tool === "move" ? " active" : ""}`}
+          onClick={() => setTool("move")}
+          title="移动（启用此键时才能上下滑动页面）"
+          aria-label="移动"
+        >
+          ✋
+        </button>
+        <button
+          type="button"
+          className="pdf-tool-btn"
+          onClick={onUndo}
+          title="撤销上一步"
+          aria-label="撤销"
+          disabled={undoStackRef.current.length === 0}
+        >
+          ↶
         </button>
         <span className="pdf-label">颜色：</span>
         {COLORS.map((c) => (
@@ -395,7 +455,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
         <span className="pdf-count">{annotations.length} 条批注</span>
       </div>
       <div
-        className={`pdf-pages${tool === "pen" ? " pdf-pages-pen" : ""}`}
+        className={`pdf-pages pdf-pages-${tool}`}
         ref={containerRef}
       >
         {pages.map((p) => (
@@ -417,7 +477,9 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
                 pageWidth={p.width}
                 pageHeight={p.height}
                 active={activeAnnotation === a.id}
+                tool={tool}
                 onActivate={() => setActiveAnnotation(a.id)}
+                onErase={() => eraseAnnotation(a.id)}
               />
             ))}
             <div className="pdf-page-number">第 {p.pageNumber} 页</div>
@@ -429,8 +491,7 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
           annotation={annotations.find((a) => a.id === activeAnnotation) ?? null}
           onChange={(patch) => updateAnnotation(activeAnnotation, patch)}
           onDelete={() => {
-            removeAnnotation(activeAnnotation);
-            setActiveAnnotation(null);
+            eraseAnnotation(activeAnnotation);
           }}
           onClose={() => setActiveAnnotation(null)}
         />
@@ -444,15 +505,24 @@ function PageAnnotation({
   pageWidth,
   pageHeight,
   active,
+  tool,
   onActivate,
+  onErase,
 }: {
   annotation: PdfAnnotation;
   pageWidth: number;
   pageHeight: number;
   active: boolean;
+  tool: Tool;
   onActivate: () => void;
+  onErase: () => void;
 }) {
   const strokes = annotation.strokes ?? [];
+  const handleHit = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (tool === "eraser") onErase();
+    else onActivate();
+  };
   return (
     <>
       {annotation.rects.map((r, i) => (
@@ -465,10 +535,7 @@ function PageAnnotation({
             width: (r.w / 100) * pageWidth,
             height: (r.h / 100) * pageHeight,
           }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            onActivate();
-          }}
+          onPointerDown={handleHit}
           title={annotation.note ?? ""}
         />
       ))}
@@ -481,8 +548,11 @@ function PageAnnotation({
             position: "absolute",
             left: 0,
             top: 0,
-            pointerEvents: "none",
+            // Eraser needs to receive taps on the strokes; otherwise
+            // the layer stays click-through so canvas dragging works.
+            pointerEvents: tool === "eraser" ? "auto" : "none",
           }}
+          onPointerDown={tool === "eraser" ? handleHit : undefined}
         >
           {strokes.map((s, i) => (
             <polyline
