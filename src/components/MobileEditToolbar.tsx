@@ -122,14 +122,21 @@ export function MobileEditToolbar() {
     });
 
   // Append `extra` text to the target block's current content via the
-  // store. If the target block's textarea is currently focused (the
-  // common case — user hit the mic button without leaving the block),
-  // we ALSO patch the textarea's DOM value in place, so the focused
-  // editor's later onBlur save can't clobber what we just appended.
-  const appendToBlock = async (targetBlockId: string, extra: string) => {
-    const cur = getActiveMobileEditor();
-    if (cur && cur.blockId === targetBlockId) {
-      const ta = cur.textarea;
+  // store. If we still have the original textarea DOM node, patch that
+  // exact node too so its later onBlur can't overwrite the saved audio
+  // reference with stale pre-recording content.
+  const appendToBlock = async (
+    targetBlockId: string,
+    extra: string,
+    targetTextarea?: HTMLTextAreaElement | null,
+  ) => {
+    const ta =
+      targetTextarea && targetTextarea.isConnected
+        ? targetTextarea
+        : getActiveMobileEditor()?.blockId === targetBlockId
+          ? getActiveMobileEditor()?.textarea ?? null
+          : null;
+    if (ta) {
       const baseValue = ta.value;
       const sep =
         baseValue.length === 0 || baseValue.endsWith("\n") ? "" : "\n";
@@ -137,8 +144,8 @@ export function MobileEditToolbar() {
       const selStart = ta.selectionStart;
       const selEnd = ta.selectionEnd;
       ta.value = next;
-      ta.selectionStart = selStart;
-      ta.selectionEnd = selEnd;
+      ta.selectionStart = Math.min(selStart, next.length);
+      ta.selectionEnd = Math.min(selEnd, next.length);
       ta.dispatchEvent(new Event("input", { bubbles: true }));
       await usePageStore.getState().updateBlock(targetBlockId, next);
       return;
@@ -209,6 +216,7 @@ export function MobileEditToolbar() {
       // time the user taps stop the textarea may have blurred and the
       // active editor may be gone, but the block id is fixed.
       const targetBlockId = blockId;
+      const targetTextarea = editor.textarea;
       // Persist any pending typing into the store first so we don't
       // lose it when we later append the audio ref.
       await flushBeforeAction();
@@ -224,10 +232,7 @@ export function MobileEditToolbar() {
           const fileName = `recording-${ts}.${ext}`;
           const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
           const ref = await api.importAudioBytes(fileName, bytes);
-          await appendToBlock(
-            targetBlockId,
-            `\n![audio](${ref.rel_path})\n`,
-          );
+          await appendToBlock(targetBlockId, `\n![audio](${ref.rel_path})\n`, targetTextarea);
         });
         logMobileDebug("mobile-toolbar.record.started", recordingId);
         return;
@@ -243,7 +248,7 @@ export function MobileEditToolbar() {
         file.name || "recording.m4a",
         bytes,
       );
-      await appendToBlock(targetBlockId, `\n![audio](${ref.rel_path})\n`);
+      await appendToBlock(targetBlockId, `\n![audio](${ref.rel_path})\n`, targetTextarea);
     });
 
   const themeIcon = theme === "dark" ? "☀" : theme === "light" ? "🖥" : "🌙";
