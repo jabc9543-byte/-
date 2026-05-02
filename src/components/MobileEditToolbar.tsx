@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { nanoid } from "nanoid";
 import { usePageStore } from "../stores/page";
 import { useSettingsStore } from "../stores/settings";
 import { useIsTouch } from "../hooks/useMediaQuery";
@@ -10,6 +11,12 @@ import { pickGalleryImages } from "../utils/mobilePermissions";
 import { confirmPermission } from "../utils/permissionConfirm";
 import { api } from "../api";
 import { logMobileDebug } from "../utils/mobileDebug";
+import {
+  beginRecording,
+  extForMime,
+  getActiveRecording,
+  subscribeRecording,
+} from "../utils/recorder";
 
 // On-screen toolbar that mirrors desktop keyboard shortcuts so that
 // every editing capability available on Windows (Ctrl+B/I/K/`,
@@ -28,17 +35,17 @@ async function readFileBytes(file: File): Promise<number[]> {
 export function MobileEditToolbar() {
   const isTouch = useIsTouch();
   const [editor, setEditor] = useState(getActiveMobileEditor());
-  const [recording, setRecording] = useState(false);
+  const [activeRecording, setActiveRecording] = useState(getActiveRecording());
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const recorderMimeRef = useRef("");
-  const recorderChunksRef = useRef<Blob[]>([]);
-  const recorderStreamRef = useRef<MediaStream | null>(null);
   const theme = useSettingsStore((s) => s.theme);
   const cycleTheme = useSettingsStore((s) => s.cycleTheme);
 
   useEffect(() => {
     return subscribeMobileEditor(() => setEditor(getActiveMobileEditor()));
+  }, []);
+
+  useEffect(() => {
+    return subscribeRecording(() => setActiveRecording(getActiveRecording()));
   }, []);
 
   // Float above the on-screen keyboard. When the soft keyboard rises,
@@ -97,25 +104,10 @@ export function MobileEditToolbar() {
 
   const insertText = (text: string) => editor?.wrap(text, "");
 
-  const cleanupRecorder = () => {
-    recorderRef.current = null;
-    recorderMimeRef.current = "";
-    recorderChunksRef.current = [];
-    recorderStreamRef.current?.getTracks().forEach((t) => t.stop());
-    recorderStreamRef.current = null;
-    setRecording(false);
-  };
+  if (!isTouch || !editor) return null;
 
-  useEffect(() => {
-    return () => {
-      cleanupRecorder();
-    };
-  }, []);
-
-  if (!isTouch) return null;
-
-  const blockId = editor?.blockId ?? "";
-  const hasEditor = editor !== null;
+  const blockId = editor.blockId;
+  const recording = activeRecording !== null;
 
   const onPickImage = () =>
     guard("pickImage", async () => {
@@ -130,97 +122,37 @@ export function MobileEditToolbar() {
       await flushBeforeAction();
     });
 
-  // Pick the best mime type supported by this WebView. Order matters:
-  // we prefer formats native <audio> can play back without transcoding.
-  const pickRecorderMime = (): string => {
-    const candidates = [
-      "audio/mp4;codecs=mp4a.40.2",
-      "audio/mp4",
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-      "audio/ogg",
-    ];
-    if (typeof MediaRecorder === "undefined") return "";
-    for (const m of candidates) {
-      try {
-        if (MediaRecorder.isTypeSupported(m)) return m;
-      } catch {
-        /* ignore */
-      }
-    }
-    return "";
+  // Replace `placeholder` (the `recording://...` token in the block
+  // text) with the saved audio reference. We re-read the latest block
+  // content from the store so concurrent edits aren't clobbered.
+  const replacePlaceholder = async (
+    targetBlockId: string,
+    placeholder: string,
+    replacement: string,
+  ) => {
+    const block = usePageStore.getState().blocks.find(
+      (b) => b.id === targetBlockId,
+    );
+    if (!block) return;
+    if (!block.content.includes(placeholder)) return;
+    const next = block.content.replace(placeholder, replacement);
+    await usePageStore.getState().updateBlock(targetBlockId, next);
   };
 
-  const extForMime = (mime: string): string => {
-    if (mime.includes("mp4")) return "m4a";
-    if (mime.includes("webm")) return "webm";
-    if (mime.includes("ogg")) return "ogg";
-    return "webm";
-  };
-
-  const saveRecordedBlob = async (blob: Blob, mime: string) => {
-    const ext = extForMime(mime);
-    const ts = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .slice(0, 19);
-    const fileName = `recording-${ts}.${ext}`;
-    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
-    const ref = await api.importAudioBytes(fileName, bytes);
-    insertText(`\n![audio](${ref.rel_path})\n`);
+  // Append `placeholder` to the block's current content (used right
+  // after we successfully start the recorder).
+  const appendPlaceholder = async (
+    targetBlockId: string,
+    placeholder: string,
+  ) => {
     await flushBeforeAction();
-  };
-
-  const startRecording = async (): Promise<boolean> => {
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error("getUserMedia not available");
-    }
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = pickRecorderMime();
-    let recorder: MediaRecorder;
-    try {
-      recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    } catch (e) {
-      stream.getTracks().forEach((t) => t.stop());
-      throw e;
-    }
-    recorder.addEventListener("dataavailable", (e) => {
-      if (e.data && e.data.size > 0) recorderChunksRef.current.push(e.data);
-    });
-    recorderChunksRef.current = [];
-    recorderRef.current = recorder;
-    recorderMimeRef.current = mime;
-    recorderStreamRef.current = stream;
-    recorder.start();
-    setRecording(true);
-    return true;
-  };
-
-  const stopRecording = async () => {
-    const recorder = recorderRef.current;
-    if (!recorder) return;
-    const finalMime = recorder.mimeType || recorderMimeRef.current || "audio/webm";
-    const stopped = new Promise<Blob | null>((resolve) => {
-      recorder.addEventListener(
-        "stop",
-        () => {
-          const chunks = recorderChunksRef.current;
-          resolve(chunks.length ? new Blob(chunks, { type: finalMime }) : null);
-        },
-        { once: true },
-      );
-    });
-    try {
-      recorder.stop();
-    } catch {
-      cleanupRecorder();
-      return;
-    }
-    const blob = await stopped;
-    cleanupRecorder();
-    if (!blob) return;
-    await saveRecordedBlob(blob, finalMime);
+    const block = usePageStore.getState().blocks.find(
+      (b) => b.id === targetBlockId,
+    );
+    if (!block) return;
+    const sep = block.content.length === 0 || block.content.endsWith("\n") ? "" : "\n";
+    const next = `${block.content}${sep}${placeholder}\n`;
+    await usePageStore.getState().updateBlock(targetBlockId, next);
   };
 
   // Fallback: hand off to the system voice recorder via <input capture>.
@@ -263,10 +195,9 @@ export function MobileEditToolbar() {
 
   const onRecord = () =>
     guard("record", async () => {
-      if (recording) {
-        await stopRecording();
-        return;
-      }
+      // Stop is handled inline by the RecordingBar inside the block,
+      // not by this button — so the mic just starts new recordings.
+      if (recording) return;
 
       const ok = await confirmPermission({
         title: "申请录音权限",
@@ -276,10 +207,28 @@ export function MobileEditToolbar() {
       });
       if (!ok) return;
 
+      const recordingId = nanoid(10);
+      const placeholder = `![audio recording](recording://${recordingId})`;
+      const targetBlockId = blockId;
+
       try {
-        if (await startRecording()) {
-          logMobileDebug("mobile-toolbar.record.started", "recording");
-        }
+        await beginRecording(recordingId, async (blob, mime) => {
+          const ext = extForMime(mime);
+          const ts = new Date()
+            .toISOString()
+            .replace(/[:.]/g, "-")
+            .slice(0, 19);
+          const fileName = `recording-${ts}.${ext}`;
+          const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+          const ref = await api.importAudioBytes(fileName, bytes);
+          await replacePlaceholder(
+            targetBlockId,
+            placeholder,
+            `![audio](${ref.rel_path})`,
+          );
+        });
+        await appendPlaceholder(targetBlockId, placeholder);
+        logMobileDebug("mobile-toolbar.record.started", recordingId);
         return;
       } catch (err) {
         logMobileDebug("mobile-toolbar.record.in-app-failed", String(err));
@@ -320,7 +269,6 @@ export function MobileEditToolbar() {
         onClick={() => wrap("**")}
         aria-label="加粗"
         title="加粗 (Ctrl+B)"
-        disabled={!hasEditor}
       >
         <b>B</b>
       </button>
@@ -332,7 +280,6 @@ export function MobileEditToolbar() {
         onClick={() => wrap("*")}
         aria-label="斜体"
         title="斜体 (Ctrl+I)"
-        disabled={!hasEditor}
       >
         <i>I</i>
       </button>
@@ -344,7 +291,6 @@ export function MobileEditToolbar() {
         onClick={() => wrap("[[", "]]")}
         aria-label="链接"
         title="页面链接 (Ctrl+K)"
-        disabled={!hasEditor}
       >
         [[ ]]
       </button>
@@ -356,7 +302,6 @@ export function MobileEditToolbar() {
         onClick={() => wrap("`")}
         aria-label="代码"
         title="行内代码 (Ctrl+`)"
-        disabled={!hasEditor}
       >
         {"</>"}
       </button>
@@ -369,7 +314,6 @@ export function MobileEditToolbar() {
         onClick={onPickImage}
         aria-label="插入图片"
         title="从图库选择图片"
-        disabled={!hasEditor}
       >
         🖼
       </button>
@@ -379,11 +323,11 @@ export function MobileEditToolbar() {
         onPointerDown={keepFocus}
         onMouseDown={keepFocus}
         onClick={onRecord}
-        aria-label={recording ? "停止录音" : "开始录音"}
-        title={recording ? "停止录音" : "开始录音"}
-        disabled={!hasEditor && !recording}
+        aria-label={recording ? "正在录音—请在块内点击■结束" : "开始录音"}
+        title={recording ? "录音中—请在块内点击■结束" : "开始录音"}
+        disabled={recording}
       >
-        {recording ? "■" : "🎤"}
+        🎙
       </button>
       <button
         type="button"
@@ -410,7 +354,6 @@ export function MobileEditToolbar() {
         }
         aria-label="减少缩进"
         title="减少缩进 (Shift+Tab)"
-        disabled={!hasEditor}
       >
         ⇤
       </button>
@@ -427,7 +370,6 @@ export function MobileEditToolbar() {
         }
         aria-label="增加缩进"
         title="增加缩进 (Tab)"
-        disabled={!hasEditor}
       >
         ⇥
       </button>
@@ -444,7 +386,6 @@ export function MobileEditToolbar() {
         }
         aria-label="上移"
         title="上移 (Alt+↑)"
-        disabled={!hasEditor}
       >
         ↑
       </button>
@@ -461,7 +402,6 @@ export function MobileEditToolbar() {
         }
         aria-label="下移"
         title="下移 (Alt+↓)"
-        disabled={!hasEditor}
       >
         ↓
       </button>
@@ -479,7 +419,6 @@ export function MobileEditToolbar() {
         }
         aria-label="切换任务状态"
         title="切换任务状态 (Ctrl+Enter)"
-        disabled={!hasEditor}
       >
         ✓
       </button>
@@ -496,7 +435,6 @@ export function MobileEditToolbar() {
         }
         aria-label="新增同级块"
         title="新增同级块 (Enter)"
-        disabled={!hasEditor}
       >
         ↵
       </button>

@@ -37,6 +37,9 @@ pub struct PdfAnnotation {
     /// Highlight rectangles in PDF page coordinates (percent of page size):
     /// `[{x, y, w, h}, ...]`.
     pub rects: Vec<Rect>,
+    /// Free-hand pen strokes drawn directly on the page (percent coords).
+    #[serde(default)]
+    pub strokes: Vec<Stroke>,
     /// Extracted text content of the highlight.
     pub text: String,
     /// Colour name ("yellow", "green", ...).
@@ -52,6 +55,19 @@ pub struct Rect {
     pub y: f32,
     pub w: f32,
     pub h: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrokePoint {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Stroke {
+    pub color: String,
+    pub width: f32,
+    pub points: Vec<StrokePoint>,
 }
 
 #[derive(Debug, Serialize)]

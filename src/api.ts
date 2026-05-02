@@ -283,8 +283,15 @@ export interface PdfAnnotation {
   id: string;
   page: number;
   rects: { x: number; y: number; w: number; h: number }[];
+  strokes?: PdfStroke[];
   text: string;
   color: string;
   note: string | null;
   created_at: string;
+}
+
+export interface PdfStroke {
+  color: string;
+  width: number;
+  points: { x: number; y: number }[];
 }

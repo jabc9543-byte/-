@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { RecordingBar } from "./RecordingBar";
 
 const cache = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();
@@ -75,6 +76,12 @@ export function AssetMedia({
   src: string;
   alt?: string;
 }) {
+  // Live recording placeholder: rendered as a recording bar with a
+  // stop button so the user can finish the recording from inside the
+  // block (independent of the floating mobile toolbar).
+  if (src.startsWith("recording://")) {
+    return <RecordingBar id={src.slice("recording://".length)} />;
+  }
   const ext = extOf(src);
   const kind: "image" | "audio" = AUDIO_EXTS.includes(ext) ? "audio" : "image";
   const [resolved, setResolved] = useState<string | null>(() =>

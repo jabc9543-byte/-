@@ -4864,3 +4864,76 @@ input, textarea { font-family: inherit; color: inherit; }
   min-height: 100%;
   padding: 6px 0;
 }
+
+/* ---------- PDF pen tool ---------- */
+.pdf-tool-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-alt);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  margin-right: 4px;
+}
+.pdf-tool-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* While pen is active the page must NOT scroll under the finger,
+   otherwise touchmove gets eaten by the scroll container before
+   pointermove fires. Disable scrolling on the pages list and on each
+   page so finger drags become drawing strokes only. */
+.pdf-pages-pen, .pdf-pages-pen .pdf-page {
+  touch-action: none;
+}
+.pdf-pages-pen .pdf-page { cursor: crosshair; }
+.pdf-pen-live { z-index: 5; }
+.pdf-stroke-layer { z-index: 4; }
+.pdf-stroke-layer.active polyline { filter: drop-shadow(0 0 2px rgba(0,0,0,0.4)); }
+
+/* ---------- In-block live recording bar ---------- */
+.recording-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  margin: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--fg);
+  max-width: 360px;
+}
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #c44;
+}
+.recording-dot.is-live {
+  animation: recording-pulse 1.1s ease-in-out infinite;
+}
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+.recording-label { flex: 1; font-size: 13px; }
+.recording-stop {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: #c44;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+.recording-stop:active { background: #a33; }
+.app-mobile .block-preview .recording-bar {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
