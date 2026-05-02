@@ -7,7 +7,7 @@ name: Release
 # 必需 secrets（可选，用于自动更新器签名）：
 #   TAURI_SIGNING_PRIVATE_KEY
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-# Android 签名（可选，缺省时 CI 会生成临时 release keystore）：
+# Android 签名（可选，缺省时 APK 为 debug 签名）：
 #   ANDROID_KEY_BASE64         — base64(keystore.jks)
 #   ANDROID_KEY_ALIAS
 #   ANDROID_KEY_PASSWORD
@@ -126,7 +126,7 @@ jobs:
               依赖 `libwebkit2gtk-4.1-0`，apt 会自动装。
 
             ### Android（`app-universal-*.apk`）
-            - 若未配置正式 Android 发布密钥，CI 会自动生成一个临时 **release 签名**；仍需在系统设置允许"未知来源"才能安装。
+            - 当前为 **debug 签名**（无 Play 商店发布密钥），需要在系统设置允许"未知来源"才能安装。
             - 路径：设置 → 应用 → 特殊应用访问 → 安装未知应用 → 允许文件管理器/浏览器。
 
             ## 校验
@@ -235,38 +235,23 @@ jobs:
           print(s)
           PY
 
-      - name: Prepare Android signing key
+      - name: Decode signing key (optional)
         env:
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          mkdir -p src-tauri/gen/android
-          if [ -n "$ANDROID_KEY_BASE64" ]; then
-            echo "$ANDROID_KEY_BASE64" | base64 -d > src-tauri/gen/android/keystore.jks
-            STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
-            KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
-            KEY_ALIAS="$ANDROID_KEY_ALIAS"
-          else
-            echo "No Android signing key provided; generating a temporary release keystore."
-            STORE_PASSWORD="android"
-            KEY_PASSWORD="android"
-            KEY_ALIAS="upload"
-            keytool -genkeypair \
-              -keystore src-tauri/gen/android/keystore.jks \
-              -storepass "$STORE_PASSWORD" \
-              -keypass "$KEY_PASSWORD" \
-              -alias "$KEY_ALIAS" \
-              -dname "CN=Quanshiwei, OU=CI, O=Quanshiwei, L=Shanghai, ST=Shanghai, C=CN" \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 3650
+          if [ -z "$ANDROID_KEY_BASE64" ]; then
+            echo "No Android signing key provided; APK will be debug-signed."
+            exit 0
           fi
+          mkdir -p src-tauri/gen/android
+          echo "$ANDROID_KEY_BASE64" | base64 -d > src-tauri/gen/android/keystore.jks
           cat > src-tauri/gen/android/keystore.properties <<EOF
-          storePassword=$STORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
           storeFile=keystore.jks
           EOF
 
@@ -274,14 +259,17 @@ jobs:
         env:
           NDK_HOME: ${{ env.NDK_HOME }}
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
         run: |
           # `--split-per-abi` produces per-architecture APKs instead of
           # a fat universal APK; combined with the single arm64 target
           # above this cuts download size by ~3-4x.
-          # Always build the release variant so the packaged app is not
-          # debuggable and will not launch into the system "Waiting For
-          # Debugger" flow on end-user devices.
-          npx tauri android build --apk --split-per-abi
+          if [ -z "$ANDROID_KEY_BASE64" ]; then
+            echo "No keystore configured — building DEBUG-signed APK so it can be installed."
+            npx tauri android build --apk --debug --split-per-abi
+          else
+            npx tauri android build --apk --split-per-abi
+          fi
 
       - name: Collect APK artifacts
         run: |
