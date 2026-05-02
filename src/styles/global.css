@@ -4782,11 +4782,40 @@ input, textarea { font-family: inherit; color: inherit; }
   border-radius: 4px;
   margin: 4px 0;
 }
-.asset-audio {
-  display: block;
-  width: 100%;
-  max-width: 360px;
+.asset-audio-wrap {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
   margin: 4px 0;
+}
+.asset-audio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--fg);
+}
+.asset-audio-btn.is-playing {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.asset-audio-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.asset-audio-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-audio {
+  display: none;
 }
 .asset-error { color: var(--danger); font-size: 12px; }
 .asset-loading { color: var(--fg-muted); font-size: 12px; }

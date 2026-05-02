@@ -28,7 +28,12 @@ async function readFileBytes(file: File): Promise<number[]> {
 export function MobileEditToolbar() {
   const isTouch = useIsTouch();
   const [editor, setEditor] = useState(getActiveMobileEditor());
+  const [recording, setRecording] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderMimeRef = useRef("");
+  const recorderChunksRef = useRef<Blob[]>([]);
+  const recorderStreamRef = useRef<MediaStream | null>(null);
   const theme = useSettingsStore((s) => s.theme);
   const cycleTheme = useSettingsStore((s) => s.cycleTheme);
 
@@ -96,6 +101,21 @@ export function MobileEditToolbar() {
 
   const insertText = (text: string) => editor.wrap(text, "");
 
+  const cleanupRecorder = () => {
+    recorderRef.current = null;
+    recorderMimeRef.current = "";
+    recorderChunksRef.current = [];
+    recorderStreamRef.current?.getTracks().forEach((t) => t.stop());
+    recorderStreamRef.current = null;
+    setRecording(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      cleanupRecorder();
+    };
+  }, []);
+
   const onPickImage = () =>
     guard("pickImage", async () => {
       const files = await pickGalleryImages();
@@ -108,11 +128,6 @@ export function MobileEditToolbar() {
       }
       await flushBeforeAction();
     });
-
-  const stopRecording = async () => {
-    /* placeholder retained for compatibility */
-  };
-  void stopRecording;
 
   // Pick the best mime type supported by this WebView. Order matters:
   // we prefer formats native <audio> can play back without transcoding.
@@ -143,44 +158,20 @@ export function MobileEditToolbar() {
     return "webm";
   };
 
-  // Show a small modal with a stop button while MediaRecorder is
-  // running. Resolves true when the user taps Stop, false on Cancel.
-  const showStopDialog = (): { wait: Promise<boolean>; close: () => void } => {
-    const backdrop = document.createElement("div");
-    backdrop.className = "perm-dialog-backdrop";
-    const dialog = document.createElement("div");
-    dialog.className = "perm-dialog";
-    dialog.innerHTML =
-      '<div class="perm-dialog-title">正在录音…</div>' +
-      '<div class="perm-dialog-desc">点击"停止"结束并保存到当前块。</div>' +
-      '<div class="perm-dialog-actions">' +
-      '<button class="perm-dialog-btn perm-dialog-cancel" type="button">取消</button>' +
-      '<button class="perm-dialog-btn perm-dialog-btn-primary perm-dialog-confirm" type="button">停止</button>' +
-      "</div>";
-    backdrop.appendChild(dialog);
-    document.body.appendChild(backdrop);
-    let resolved = false;
-    let resolver: (v: boolean) => void = () => {};
-    const wait = new Promise<boolean>((resolve) => {
-      resolver = resolve;
-    });
-    const finish = (v: boolean) => {
-      if (resolved) return;
-      resolved = true;
-      backdrop.remove();
-      resolver(v);
-    };
-    dialog
-      .querySelector(".perm-dialog-confirm")!
-      .addEventListener("click", () => finish(true));
-    dialog
-      .querySelector(".perm-dialog-cancel")!
-      .addEventListener("click", () => finish(false));
-    return { wait, close: () => finish(false) };
+  const saveRecordedBlob = async (blob: Blob, mime: string) => {
+    const ext = extForMime(mime);
+    const ts = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, 19);
+    const fileName = `recording-${ts}.${ext}`;
+    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+    const ref = await api.importAudioBytes(fileName, bytes);
+    insertText(`\n![audio](${ref.rel_path})\n`);
+    await flushBeforeAction();
   };
 
-  // Try in-app MediaRecorder. Throws on permission denial / unsupported.
-  const recordInApp = async (): Promise<{ blob: Blob; mime: string } | null> => {
+  const startRecording = async (): Promise<boolean> => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       throw new Error("getUserMedia not available");
     }
@@ -193,26 +184,42 @@ export function MobileEditToolbar() {
       stream.getTracks().forEach((t) => t.stop());
       throw e;
     }
-    const chunks: Blob[] = [];
     recorder.addEventListener("dataavailable", (e) => {
-      if (e.data && e.data.size > 0) chunks.push(e.data);
+      if (e.data && e.data.size > 0) recorderChunksRef.current.push(e.data);
     });
-    const stopped = new Promise<void>((resolve) => {
-      recorder.addEventListener("stop", () => resolve(), { once: true });
-    });
+    recorderChunksRef.current = [];
+    recorderRef.current = recorder;
+    recorderMimeRef.current = mime;
+    recorderStreamRef.current = stream;
     recorder.start();
-    const dlg = showStopDialog();
-    const ok = await dlg.wait;
+    setRecording(true);
+    return true;
+  };
+
+  const stopRecording = async () => {
+    const recorder = recorderRef.current;
+    if (!recorder) return;
+    const finalMime = recorder.mimeType || recorderMimeRef.current || "audio/webm";
+    const stopped = new Promise<Blob | null>((resolve) => {
+      recorder.addEventListener(
+        "stop",
+        () => {
+          const chunks = recorderChunksRef.current;
+          resolve(chunks.length ? new Blob(chunks, { type: finalMime }) : null);
+        },
+        { once: true },
+      );
+    });
     try {
       recorder.stop();
     } catch {
-      /* ignore */
+      cleanupRecorder();
+      return;
     }
-    await stopped;
-    stream.getTracks().forEach((t) => t.stop());
-    if (!ok || chunks.length === 0) return null;
-    const finalMime = recorder.mimeType || mime || "audio/webm";
-    return { blob: new Blob(chunks, { type: finalMime }), mime: finalMime };
+    const blob = await stopped;
+    cleanupRecorder();
+    if (!blob) return;
+    await saveRecordedBlob(blob, finalMime);
   };
 
   // Fallback: hand off to the system voice recorder via <input capture>.
@@ -255,6 +262,11 @@ export function MobileEditToolbar() {
 
   const onRecord = () =>
     guard("record", async () => {
+      if (recording) {
+        await stopRecording();
+        return;
+      }
+
       const ok = await confirmPermission({
         title: "申请录音权限",
         description: "应用将使用麦克风录制语音，并把录音直接保存到当前块。",
@@ -263,23 +275,10 @@ export function MobileEditToolbar() {
       });
       if (!ok) return;
 
-      // Preferred path: in-app MediaRecorder so user taps Stop and the
-      // audio lands directly in the block.
       try {
-        const result = await recordInApp();
-        if (!result) return;
-        const ext = extForMime(result.mime);
-        const ts = new Date()
-          .toISOString()
-          .replace(/[:.]/g, "-")
-          .slice(0, 19);
-        const fileName = `recording-${ts}.${ext}`;
-        const bytes = Array.from(
-          new Uint8Array(await result.blob.arrayBuffer()),
-        );
-        const ref = await api.importAudioBytes(fileName, bytes);
-        insertText(`\n![audio](${ref.rel_path})\n`);
-        await flushBeforeAction();
+        if (await startRecording()) {
+          logMobileDebug("mobile-toolbar.record.started", "recording");
+        }
         return;
       } catch (err) {
         logMobileDebug("mobile-toolbar.record.in-app-failed", String(err));
@@ -370,14 +369,14 @@ export function MobileEditToolbar() {
       </button>
       <button
         type="button"
-        className="mobile-edit-btn"
+        className={`mobile-edit-btn${recording ? " mobile-edit-btn-recording" : ""}`}
         onPointerDown={keepFocus}
         onMouseDown={keepFocus}
         onClick={onRecord}
-        aria-label="录音"
-        title="录音（系统录音机）"
+        aria-label={recording ? "停止录音" : "开始录音"}
+        title={recording ? "停止录音" : "开始录音"}
       >
-        🎤
+        {recording ? "■" : "🎤"}
       </button>
       <button
         type="button"
