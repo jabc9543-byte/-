@@ -243,11 +243,15 @@ input, textarea { font-family: inherit; color: inherit; }
   background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.15);
   display: flex; flex-direction: column; padding: 4px; z-index: 10;
+  min-width: max-content;
+  max-width: min(92vw, 360px);
 }
 .transfer-popover button {
   text-align: left; padding: 6px 10px; background: transparent;
   border: none; color: inherit; border-radius: 4px; cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .transfer-popover button:hover { background: var(--bg-hover); }
 .transfer-divider { height: 1px; background: var(--border); margin: 4px 0; }
@@ -3259,6 +3263,13 @@ input, textarea { font-family: inherit; color: inherit; }
   .sidebar footer button,
   .sidebar footer .transfer-menu {
     flex: 1 0 30%;
+  }
+  .sidebar footer .transfer-popover {
+    left: 0;
+    right: auto;
+    min-width: 0;
+    width: min(320px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
   }
 
   /* PDF library: single-pane on mobile. */

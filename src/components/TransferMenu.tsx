@@ -3,6 +3,7 @@ import { save, open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { usePageStore } from "../stores/page";
 import { useWhiteboardStore } from "../stores/whiteboard";
+import { pickMarkdownFiles } from "../utils/mobilePermissions";
 
 type Status =
   | { kind: "idle" }
@@ -124,6 +125,29 @@ export function TransferMenu() {
     setOpen(false);
   };
 
+  const onImportMarkdownFiles = async () => {
+    const files = await pickMarkdownFiles();
+    if (files.length === 0) return;
+    await wrap("导入 Markdown 文件", async () => {
+      let pages = 0;
+      let blocks = 0;
+      for (const file of files) {
+        const content = await file.text();
+        const result = await api.importMarkdownFile(file.name, content);
+        pages += result.pages;
+        blocks += result.blocks;
+      }
+      await refreshPages();
+      await refreshWhiteboards();
+      setStatus({
+        kind: "ok",
+        label: `已导入 ${pages} 页面、${blocks} 块`,
+      });
+      setTimeout(() => setStatus({ kind: "idle" }), 3500);
+    });
+    setOpen(false);
+  };
+
   const onImportDir = async () => {
     const picked = await open({ multiple: false, directory: true });
     const path = typeof picked === "string" ? picked : null;
@@ -194,6 +218,7 @@ export function TransferMenu() {
           <button onClick={onExportActivePage}>当前页面 → Markdown</button>
           <div className="transfer-divider" />
           <div className="transfer-section">导入</div>
+          <button onClick={onImportMarkdownFiles}>Markdown 文件…</button>
           <button onClick={onImport}>Markdown ZIP…</button>
           <button onClick={onImportDir}>全视维 / Logseq 图谱文件夹…</button>
           <button onClick={onImportJson}>JSON 转储…</button>
