@@ -73,10 +73,6 @@ export function MobileEditToolbar() {
     };
   }, [isTouch, editor]);
 
-  if (!isTouch || !editor) return null;
-
-  const blockId = editor.blockId;
-
   const keepFocus = (e: React.PointerEvent | React.MouseEvent) => {
     e.preventDefault();
   };
@@ -91,15 +87,15 @@ export function MobileEditToolbar() {
 
   const flushBeforeAction = async () => {
     try {
-      await editor.flush();
+      await editor?.flush();
     } catch {
       /* ignore — store handles errors */
     }
   };
 
-  const wrap = (prefix: string, suffix?: string) => editor.wrap(prefix, suffix);
+  const wrap = (prefix: string, suffix?: string) => editor?.wrap(prefix, suffix);
 
-  const insertText = (text: string) => editor.wrap(text, "");
+  const insertText = (text: string) => editor?.wrap(text, "");
 
   const cleanupRecorder = () => {
     recorderRef.current = null;
@@ -115,6 +111,10 @@ export function MobileEditToolbar() {
       cleanupRecorder();
     };
   }, []);
+
+  if (!isTouch || !editor) return null;
+
+  const blockId = editor.blockId;
 
   const onPickImage = () =>
     guard("pickImage", async () => {
