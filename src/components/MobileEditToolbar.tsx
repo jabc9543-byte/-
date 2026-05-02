@@ -112,9 +112,10 @@ export function MobileEditToolbar() {
     };
   }, []);
 
-  if (!isTouch || !editor) return null;
+  if (!isTouch) return null;
 
-  const blockId = editor.blockId;
+  const blockId = editor?.blockId ?? "";
+  const hasEditor = editor !== null;
 
   const onPickImage = () =>
     guard("pickImage", async () => {
@@ -319,6 +320,7 @@ export function MobileEditToolbar() {
         onClick={() => wrap("**")}
         aria-label="加粗"
         title="加粗 (Ctrl+B)"
+        disabled={!hasEditor}
       >
         <b>B</b>
       </button>
@@ -330,6 +332,7 @@ export function MobileEditToolbar() {
         onClick={() => wrap("*")}
         aria-label="斜体"
         title="斜体 (Ctrl+I)"
+        disabled={!hasEditor}
       >
         <i>I</i>
       </button>
@@ -341,6 +344,7 @@ export function MobileEditToolbar() {
         onClick={() => wrap("[[", "]]")}
         aria-label="链接"
         title="页面链接 (Ctrl+K)"
+        disabled={!hasEditor}
       >
         [[ ]]
       </button>
@@ -352,6 +356,7 @@ export function MobileEditToolbar() {
         onClick={() => wrap("`")}
         aria-label="代码"
         title="行内代码 (Ctrl+`)"
+        disabled={!hasEditor}
       >
         {"</>"}
       </button>
@@ -364,6 +369,7 @@ export function MobileEditToolbar() {
         onClick={onPickImage}
         aria-label="插入图片"
         title="从图库选择图片"
+        disabled={!hasEditor}
       >
         🖼
       </button>
@@ -375,6 +381,7 @@ export function MobileEditToolbar() {
         onClick={onRecord}
         aria-label={recording ? "停止录音" : "开始录音"}
         title={recording ? "停止录音" : "开始录音"}
+        disabled={!hasEditor && !recording}
       >
         {recording ? "■" : "🎤"}
       </button>
@@ -403,6 +410,7 @@ export function MobileEditToolbar() {
         }
         aria-label="减少缩进"
         title="减少缩进 (Shift+Tab)"
+        disabled={!hasEditor}
       >
         ⇤
       </button>
@@ -419,6 +427,7 @@ export function MobileEditToolbar() {
         }
         aria-label="增加缩进"
         title="增加缩进 (Tab)"
+        disabled={!hasEditor}
       >
         ⇥
       </button>
@@ -435,6 +444,7 @@ export function MobileEditToolbar() {
         }
         aria-label="上移"
         title="上移 (Alt+↑)"
+        disabled={!hasEditor}
       >
         ↑
       </button>
@@ -451,6 +461,7 @@ export function MobileEditToolbar() {
         }
         aria-label="下移"
         title="下移 (Alt+↓)"
+        disabled={!hasEditor}
       >
         ↓
       </button>
@@ -468,6 +479,7 @@ export function MobileEditToolbar() {
         }
         aria-label="切换任务状态"
         title="切换任务状态 (Ctrl+Enter)"
+        disabled={!hasEditor}
       >
         ✓
       </button>
@@ -484,6 +496,7 @@ export function MobileEditToolbar() {
         }
         aria-label="新增同级块"
         title="新增同级块 (Enter)"
+        disabled={!hasEditor}
       >
         ↵
       </button>

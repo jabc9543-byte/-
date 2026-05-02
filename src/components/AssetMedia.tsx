@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 
 const cache = new Map<string, string>();
@@ -81,9 +81,6 @@ export function AssetMedia({
     isAsset(src) ? cache.get(src) ?? null : src,
   );
   const [error, setError] = useState<string | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const tapTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!isAsset(src)) {
@@ -104,31 +101,6 @@ export function AssetMedia({
     };
   }, [src, kind]);
 
-  useEffect(() => {
-    if (kind !== "audio") return;
-    const audio = audioRef.current;
-    if (!audio) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onEnded = () => setPlaying(false);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("ended", onEnded);
-    };
-  }, [kind, resolved]);
-
-  useEffect(() => {
-    return () => {
-      if (tapTimerRef.current !== null) {
-        window.clearTimeout(tapTimerRef.current);
-      }
-    };
-  }, []);
-
   if (error) {
     return (
       <span className="asset-error" title={error}>
@@ -140,58 +112,21 @@ export function AssetMedia({
     return <span className="asset-loading">…</span>;
   }
   if (kind === "audio") {
-    const togglePlayback = () => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      if (audio.paused) {
-        void audio.play().catch(() => {});
-      } else {
-        audio.pause();
-      }
-    };
-
     return (
       <span
         className="asset-audio-wrap"
         onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          focusNearestEditor(e.currentTarget);
+        }}
       >
-        <button
-          type="button"
-          className={`asset-audio-btn${playing ? " is-playing" : ""}`}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (tapTimerRef.current !== null) {
-              window.clearTimeout(tapTimerRef.current);
-              tapTimerRef.current = null;
-              focusNearestEditor(e.currentTarget);
-              return;
-            }
-            tapTimerRef.current = window.setTimeout(() => {
-              tapTimerRef.current = null;
-              togglePlayback();
-            }, 220);
-          }}
-          onDoubleClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (tapTimerRef.current !== null) {
-              window.clearTimeout(tapTimerRef.current);
-              tapTimerRef.current = null;
-            }
-            focusNearestEditor(e.currentTarget);
-          }}
-          title="单击播放，双击编辑"
-          aria-label={playing ? "暂停录音" : "播放录音"}
-        >
-          <span className="asset-audio-icon" aria-hidden>
-            {playing ? "⏸" : "▶"}
-          </span>
-          <span className="asset-audio-label">{alt || "audio"}</span>
-        </button>
         <audio
-          ref={audioRef}
           className="asset-audio"
+          controls
           preload="metadata"
           src={resolved}
         />
@@ -204,7 +139,13 @@ export function AssetMedia({
       src={resolved}
       alt={alt || ""}
       loading="lazy"
+      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        focusNearestEditor(e.currentTarget);
+      }}
     />
   );
 }

@@ -151,7 +151,16 @@ export function PdfViewer({ pdfId }: { pdfId: string }) {
 
   const onMouseDown = useCallback(
     (e: React.PointerEvent, pageNumber: number) => {
-      if (e.target !== e.currentTarget) return;
+      // Allow drags that start on the page itself or on its child
+      // canvas. Highlight overlays already call stopPropagation, so
+      // dragging on top of an existing highlight won't reach this.
+      const target = e.target as HTMLElement;
+      if (
+        target !== e.currentTarget &&
+        target.tagName !== "CANVAS"
+      ) {
+        return;
+      }
       const host = e.currentTarget as HTMLDivElement;
       const box = host.getBoundingClientRect();
       const startX = e.clientX - box.left;

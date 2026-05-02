@@ -3075,6 +3075,21 @@ input, textarea { font-family: inherit; color: inherit; }
   padding: 2px 4px;
   margin: -2px -4px;
 }
+/* Media elements need to receive native taps (audio play/scrub/3-dot,
+   image full-screen) instead of falling through to the editor overlay.
+   The blurred editor sits absolutely on top of the preview, so we also
+   raise the media above it via stacking context. */
+.app-mobile .block-preview .asset-image,
+.app-mobile .block-preview .asset-audio-wrap,
+.app-mobile .block-preview .asset-audio,
+.app-mobile .block-preview .asset-audio * {
+  pointer-events: auto;
+}
+.app-mobile .block-preview .asset-image,
+.app-mobile .block-preview .asset-audio-wrap {
+  position: relative;
+  z-index: 2;
+}
 /* On Android the textarea was effectively invisible (transparent bg, no
    border, height shrinking via field-sizing) so users had nothing to tap.
    Restore an obvious tappable surface. We deliberately do NOT use
@@ -4815,7 +4830,10 @@ input, textarea { font-family: inherit; color: inherit; }
   white-space: nowrap;
 }
 .asset-audio {
-  display: none;
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin: 4px 0;
 }
 .asset-error { color: var(--danger); font-size: 12px; }
 .asset-loading { color: var(--fg-muted); font-size: 12px; }
