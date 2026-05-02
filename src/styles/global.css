@@ -337,12 +337,17 @@ input, textarea { font-family: inherit; color: inherit; }
 }
 /* On mobile, the transparent text/caret on .is-blurred makes Android's
    IME think the field is not editable and dismiss the soft keyboard
-   immediately on tap. Re-assert visible text and caret with higher
-   specificity than the desktop selector above. */
-.app-mobile .block-editor-stack .block-editor.is-blurred,
-.app-mobile .block-editor-stack .block-editor {
+   immediately on tap. Only re-assert visible text while the editor is
+   actually focused; otherwise the rendered preview and textarea text
+   get painted together and produce a "ghosting" double image. */
+.app-mobile .block-editor-stack:focus-within .block-editor,
+.app-mobile .block-editor-stack:focus-within .block-editor.is-blurred {
   color: var(--fg) !important;
   caret-color: auto !important;
+}
+.app-mobile .block-editor-stack:not(:focus-within) .block-editor.is-blurred {
+  color: transparent !important;
+  caret-color: transparent !important;
 }
 .block-preview {
   position: absolute; inset: 0;
