@@ -121,15 +121,16 @@ export function MobileEditToolbar() {
       await flushBeforeAction();
     });
 
-  // Append `extra` text to the target block's current content via the
-  // store. If we still have the original textarea DOM node, patch that
-  // exact node too so its later onBlur can't overwrite the saved audio
-  // reference with stale pre-recording content.
-  const appendToBlock = async (
+  // Save audio as its own block. If the current block is empty, reuse
+  // that block; otherwise insert a sibling right after it. This avoids
+  // racing the focused textarea's blur/persist path and makes the audio
+  // bar render as a standalone block immediately.
+  const placeAudioBlock = async (
     targetBlockId: string,
-    extra: string,
+    audioRef: string,
     targetTextarea?: HTMLTextAreaElement | null,
   ) => {
+    const content = `![audio](${audioRef})`;
     const ta =
       targetTextarea && targetTextarea.isConnected
         ? targetTextarea
@@ -137,39 +138,43 @@ export function MobileEditToolbar() {
           ? getActiveMobileEditor()?.textarea ?? null
           : null;
     if (ta) {
-      const baseValue = ta.value;
-      const sep =
-        baseValue.length === 0 || baseValue.endsWith("\n") ? "" : "\n";
-      const next = `${baseValue}${sep}${extra}`;
-      logMobileDebug("mobile-toolbar.record.append", "textarea path", {
+      const baseValue = ta.value.trim();
+      if (baseValue.length === 0) {
+        logMobileDebug("mobile-toolbar.record.place", "reuse empty textarea block", {
+          blockId: targetBlockId,
+          nextPreview: content,
+        });
+        ta.value = content;
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        await usePageStore.getState().updateBlock(targetBlockId, content);
+        return;
+      }
+      logMobileDebug("mobile-toolbar.record.place", "insert sibling after textarea block", {
         blockId: targetBlockId,
         baseLength: baseValue.length,
-        nextLength: next.length,
-        nextPreview: next.slice(0, 160),
+        nextPreview: content,
       });
-      const selStart = ta.selectionStart;
-      const selEnd = ta.selectionEnd;
-      ta.value = next;
-      ta.selectionStart = Math.min(selStart, next.length);
-      ta.selectionEnd = Math.min(selEnd, next.length);
-      ta.dispatchEvent(new Event("input", { bubbles: true }));
-      await usePageStore.getState().updateBlock(targetBlockId, next);
+      await usePageStore.getState().insertSibling(targetBlockId, content);
       return;
     }
     const block = usePageStore.getState().blocks.find(
       (b) => b.id === targetBlockId,
     );
     if (!block) return;
-    const sep =
-      block.content.length === 0 || block.content.endsWith("\n") ? "" : "\n";
-    const next = `${block.content}${sep}${extra}`;
-    logMobileDebug("mobile-toolbar.record.append", "store path", {
+    if (block.content.trim().length === 0) {
+      logMobileDebug("mobile-toolbar.record.place", "reuse empty store block", {
+        blockId: targetBlockId,
+        nextPreview: content,
+      });
+      await usePageStore.getState().updateBlock(targetBlockId, content);
+      return;
+    }
+    logMobileDebug("mobile-toolbar.record.place", "insert sibling after store block", {
       blockId: targetBlockId,
       baseLength: block.content.length,
-      nextLength: next.length,
-      nextPreview: next.slice(0, 160),
+      nextPreview: content,
     });
-    await usePageStore.getState().updateBlock(targetBlockId, next);
+    await usePageStore.getState().insertSibling(targetBlockId, content);
   };
 
   // Fallback: hand off to the system voice recorder via <input capture>.
@@ -259,7 +264,7 @@ export function MobileEditToolbar() {
             mime,
             ext,
           });
-          await appendToBlock(targetBlockId, `![audio](${ref.rel_path})\n`, targetTextarea);
+          await placeAudioBlock(targetBlockId, ref.rel_path, targetTextarea);
         });
         logMobileDebug("mobile-toolbar.record.started", recordingId);
         return;
@@ -276,7 +281,7 @@ export function MobileEditToolbar() {
         file.name || "recording.m4a",
         bytes,
       );
-      await appendToBlock(targetBlockId, `![audio](${ref.rel_path})\n`, targetTextarea);
+      await placeAudioBlock(targetBlockId, ref.rel_path, targetTextarea);
     });
 
   const themeIcon = theme === "dark" ? "☀" : theme === "light" ? "🖥" : "🌙";
