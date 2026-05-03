@@ -398,6 +398,19 @@ function BlockRowImpl({ block }: Props) {
     const mediaRefs = extractInlineMedia(renderedContent);
     const previewText = stripInlineMedia(renderedContent);
 
+    useEffect(() => {
+      if (!isTouch) return;
+      if (!renderedContent.includes("![audio](assets/audio/")) return;
+      logMobileDebug("block.render", "audio token observed", {
+        blockId: block.id,
+        focused,
+        renderedLength: renderedContent.length,
+        mediaCount: mediaRefs.length,
+        previewLength: previewText.length,
+        renderedPreview: renderedContent.slice(0, 160),
+      });
+    }, [block.id, focused, isTouch, mediaRefs.length, previewText.length, renderedContent]);
+
   return (
     <div
       ref={rowRef}

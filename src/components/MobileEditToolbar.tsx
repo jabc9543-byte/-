@@ -141,6 +141,12 @@ export function MobileEditToolbar() {
       const sep =
         baseValue.length === 0 || baseValue.endsWith("\n") ? "" : "\n";
       const next = `${baseValue}${sep}${extra}`;
+      logMobileDebug("mobile-toolbar.record.append", "textarea path", {
+        blockId: targetBlockId,
+        baseLength: baseValue.length,
+        nextLength: next.length,
+        nextPreview: next.slice(0, 160),
+      });
       const selStart = ta.selectionStart;
       const selEnd = ta.selectionEnd;
       ta.value = next;
@@ -157,6 +163,12 @@ export function MobileEditToolbar() {
     const sep =
       block.content.length === 0 || block.content.endsWith("\n") ? "" : "\n";
     const next = `${block.content}${sep}${extra}`;
+    logMobileDebug("mobile-toolbar.record.append", "store path", {
+      blockId: targetBlockId,
+      baseLength: block.content.length,
+      nextLength: next.length,
+      nextPreview: next.slice(0, 160),
+    });
     await usePageStore.getState().updateBlock(targetBlockId, next);
   };
 
@@ -232,6 +244,12 @@ export function MobileEditToolbar() {
           const fileName = `recording-${ts}.${ext}`;
           const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
           const ref = await api.importAudioBytes(fileName, bytes);
+          logMobileDebug("mobile-toolbar.record.saved", "audio imported", {
+            blockId: targetBlockId,
+            relPath: ref.rel_path,
+            mime,
+            ext,
+          });
           await appendToBlock(targetBlockId, `![audio](${ref.rel_path})\n`, targetTextarea);
         });
         logMobileDebug("mobile-toolbar.record.started", recordingId);

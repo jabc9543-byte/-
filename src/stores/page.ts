@@ -77,6 +77,9 @@ export const usePageStore = create<PageState>((set, get) => ({
       id,
       pageFound: !!page,
       blockCount: blocks.length,
+      firstBlockId: blocks[0]?.id ?? null,
+      firstBlockLength: blocks[0]?.content.length ?? null,
+      firstBlockPreview: blocks[0]?.content.slice(0, 160) ?? null,
       tookMs: Date.now() - startedAt,
     });
     if (page) {
@@ -137,6 +140,7 @@ export const usePageStore = create<PageState>((set, get) => ({
       id,
       prevLength: prevBlock?.content.length ?? null,
       nextLength: content.length,
+      nextPreview: content.slice(0, 160),
       pendingBefore: get().pendingBlockWrites,
     });
     set((s) => ({
