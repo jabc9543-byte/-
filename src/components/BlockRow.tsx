@@ -394,8 +394,9 @@ function BlockRowImpl({ block }: Props) {
         : dropPos === "child"
           ? " drop-child"
           : "";
-    const mediaRefs = extractInlineMedia(value);
-    const previewText = stripInlineMedia(value);
+    const renderedContent = ref.current?.value ?? value;
+    const mediaRefs = extractInlineMedia(renderedContent);
+    const previewText = stripInlineMedia(renderedContent);
 
   return (
     <div
