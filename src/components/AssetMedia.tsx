@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { RecordingBar } from "./RecordingBar";
+import { logMobileDebug } from "../utils/mobileDebug";
 
 const cache = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();
@@ -43,14 +44,41 @@ async function fetchObjectUrl(
   const pending = inflight.get(relPath);
   if (pending) return pending;
   const p = (async () => {
-    const bytes = await api.readAssetBytes(relPath);
-    const blob = new Blob([new Uint8Array(bytes)], {
-      type: mimeFor(extOf(relPath), kind),
-    });
-    const url = URL.createObjectURL(blob);
-    cache.set(relPath, url);
-    inflight.delete(relPath);
-    return url;
+    if (kind === "audio") {
+      logMobileDebug("asset.audio", "fetch start", { relPath });
+    }
+    try {
+      const bytes = await api.readAssetBytes(relPath);
+      if (kind === "audio") {
+        logMobileDebug("asset.audio", "bytes received", {
+          relPath,
+          byteCount: bytes.length,
+        });
+      }
+      const blob = new Blob([new Uint8Array(bytes)], {
+        type: mimeFor(extOf(relPath), kind),
+      });
+      const url = URL.createObjectURL(blob);
+      cache.set(relPath, url);
+      inflight.delete(relPath);
+      if (kind === "audio") {
+        logMobileDebug("asset.audio", "blob url ready", {
+          relPath,
+          mime: mimeFor(extOf(relPath), kind),
+          urlPrefix: url.slice(0, 24),
+        });
+      }
+      return url;
+    } catch (err) {
+      inflight.delete(relPath);
+      if (kind === "audio") {
+        logMobileDebug("asset.audio", "fetch error", {
+          relPath,
+          error: String(err),
+        });
+      }
+      throw err;
+    }
   })();
   inflight.set(relPath, p);
   return p;
@@ -136,6 +164,24 @@ export function AssetMedia({
           controls
           preload="metadata"
           src={resolved}
+          onLoadedMetadata={(e) => {
+            const el = e.currentTarget;
+            logMobileDebug("asset.audio", "loaded metadata", {
+              src,
+              duration: el.duration,
+              readyState: el.readyState,
+            });
+          }}
+          onError={(e) => {
+            const el = e.currentTarget;
+            logMobileDebug("asset.audio", "element error", {
+              src,
+              code: el.error?.code,
+              message: el.error?.message,
+              networkState: el.networkState,
+              readyState: el.readyState,
+            });
+          }}
         />
       </span>
     );

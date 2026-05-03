@@ -330,7 +330,14 @@ input, textarea { font-family: inherit; color: inherit; }
 .graph-meta { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
 .main h1 { margin: 0 0 16px; font-size: 28px; }
 
-.block-row { display: flex; align-items: flex-start; padding: 2px 0; position: relative; }
+.block-row { display: flex; flex-wrap: wrap; align-items: flex-start; padding: 2px 0; position: relative; }
+/* Push media/embed lists onto their own row beneath the editor line so
+   they aren't squeezed to a 0-width sliver next to .block-line. */
+.block-row > .block-media-list,
+.block-row > .block-embed-list {
+  flex: 0 0 100%;
+  margin-left: 24px;
+}
 .block-bullet {
   flex: 0 0 18px; height: 24px; display: flex; align-items: center;
   justify-content: center; color: var(--fg-muted); cursor: grab;
