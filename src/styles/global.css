@@ -331,12 +331,12 @@ input, textarea { font-family: inherit; color: inherit; }
 .main h1 { margin: 0 0 16px; font-size: 28px; }
 
 .block-row { display: flex; flex-wrap: wrap; align-items: flex-start; padding: 2px 0; position: relative; }
-/* Push media/embed lists onto their own row beneath the editor line so
-   they aren't squeezed to a 0-width sliver next to .block-line. */
-.block-row > .block-media-list,
-.block-row > .block-embed-list {
-  flex: 0 0 100%;
-  margin-left: 24px;
+/* The media list lives inside `.block-row > div > .block-media-list`,
+   NOT directly under .block-row. Make sure it always wins layout space
+   and is visibly distinct so users can spot the audio bar. */
+.block-media-list {
+  width: 100%;
+  min-height: 40px;
 }
 .block-bullet {
   flex: 0 0 18px; height: 24px; display: flex; align-items: center;
@@ -4821,6 +4821,12 @@ input, textarea { font-family: inherit; color: inherit; }
   border-radius: 999px;
   background: var(--bg-alt);
   color: var(--fg);
+  cursor: pointer;
+}
+.app-mobile .asset-audio-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 15px;
 }
 .asset-audio-btn.is-playing {
   border-color: var(--accent);

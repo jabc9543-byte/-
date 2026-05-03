@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { RecordingBar } from "./RecordingBar";
 import { logMobileDebug } from "../utils/mobileDebug";
@@ -148,42 +148,11 @@ export function AssetMedia({
   }
   if (kind === "audio") {
     return (
-      <span
-        className="asset-audio-wrap"
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          focusNearestEditor(e.currentTarget);
-        }}
-      >
-        <audio
-          className="asset-audio"
-          controls
-          preload="metadata"
-          src={resolved}
-          onLoadedMetadata={(e) => {
-            const el = e.currentTarget;
-            logMobileDebug("asset.audio", "loaded metadata", {
-              src,
-              duration: el.duration,
-              readyState: el.readyState,
-            });
-          }}
-          onError={(e) => {
-            const el = e.currentTarget;
-            logMobileDebug("asset.audio", "element error", {
-              src,
-              code: el.error?.code,
-              message: el.error?.message,
-              networkState: el.networkState,
-              readyState: el.readyState,
-            });
-          }}
-        />
-      </span>
+      <CustomAudioPlayer
+        src={src}
+        resolvedUrl={resolved}
+        onFocusEditor={(target) => focusNearestEditor(target)}
+      />
     );
   }
   return (
@@ -200,5 +169,133 @@ export function AssetMedia({
         focusNearestEditor(e.currentTarget);
       }}
     />
+  );
+}
+
+function formatTime(s: number): string {
+  if (!Number.isFinite(s) || s < 0) return "0:00";
+  const total = Math.floor(s);
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function CustomAudioPlayer({
+  src,
+  resolvedUrl,
+  onFocusEditor,
+}: {
+  src: string;
+  resolvedUrl: string;
+  onFocusEditor: (target: EventTarget | null) => void;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [duration, setDuration] = useState<number>(0);
+  const [position, setPosition] = useState<number>(0);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    logMobileDebug("asset.audio", "custom player mount", {
+      src,
+      urlPrefix: resolvedUrl.slice(0, 24),
+    });
+    return () => {
+      const el = audioRef.current;
+      if (el) {
+        el.pause();
+      }
+    };
+  }, [src, resolvedUrl]);
+
+  const toggle = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.paused) {
+      el.play()
+        .then(() => {
+          logMobileDebug("asset.audio", "play started", { src });
+        })
+        .catch((e) => {
+          logMobileDebug("asset.audio", "play rejected", {
+            src,
+            error: String(e),
+          });
+          setErr(String(e));
+        });
+    } else {
+      el.pause();
+    }
+  };
+
+  return (
+    <span
+      className="asset-audio-wrap"
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onFocusEditor(e.currentTarget);
+      }}
+    >
+      <button
+        type="button"
+        className={`asset-audio-btn${playing ? " is-playing" : ""}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggle();
+        }}
+        title={err ? `播放失败：${err}` : playing ? "暂停" : "播放"}
+      >
+        <span className="asset-audio-icon" aria-hidden="true">
+          {playing ? "⏸" : "▶"}
+        </span>
+        <span className="asset-audio-label">
+          {formatTime(position)}
+          {duration > 0 ? ` / ${formatTime(duration)}` : ""}
+          {err ? "  ⚠" : ""}
+        </span>
+      </button>
+      <audio
+        ref={audioRef}
+        src={resolvedUrl}
+        preload="metadata"
+        style={{ display: "none" }}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          setPosition(0);
+        }}
+        onLoadedMetadata={(e) => {
+          const el = e.currentTarget;
+          setDuration(Number.isFinite(el.duration) ? el.duration : 0);
+          logMobileDebug("asset.audio", "loaded metadata", {
+            src,
+            duration: el.duration,
+            readyState: el.readyState,
+          });
+        }}
+        onTimeUpdate={(e) => {
+          setPosition(e.currentTarget.currentTime);
+        }}
+        onError={(e) => {
+          const el = e.currentTarget;
+          const msg = el.error
+            ? `code=${el.error.code} ${el.error.message ?? ""}`
+            : "unknown";
+          setErr(msg);
+          logMobileDebug("asset.audio", "element error", {
+            src,
+            message: msg,
+            networkState: el.networkState,
+            readyState: el.readyState,
+          });
+        }}
+      />
+    </span>
   );
 }
