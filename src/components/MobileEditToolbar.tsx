@@ -232,7 +232,7 @@ export function MobileEditToolbar() {
           const fileName = `recording-${ts}.${ext}`;
           const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
           const ref = await api.importAudioBytes(fileName, bytes);
-          await appendToBlock(targetBlockId, `\n![audio](${ref.rel_path})\n`, targetTextarea);
+          await appendToBlock(targetBlockId, `![audio](${ref.rel_path})\n`, targetTextarea);
         });
         logMobileDebug("mobile-toolbar.record.started", recordingId);
         return;
@@ -248,7 +248,7 @@ export function MobileEditToolbar() {
         file.name || "recording.m4a",
         bytes,
       );
-      await appendToBlock(targetBlockId, `\n![audio](${ref.rel_path})\n`, targetTextarea);
+      await appendToBlock(targetBlockId, `![audio](${ref.rel_path})\n`, targetTextarea);
     });
 
   const themeIcon = theme === "dark" ? "☀" : theme === "light" ? "🖥" : "🌙";
