@@ -33,6 +33,11 @@ interface Token {
   alt?: string;
 }
 
+export interface InlineMediaRef {
+  src: string;
+  alt?: string;
+}
+
 /** 扫描所有 token 并按顺序返回；token 互不重叠。 */
 function tokenize(content: string): Token[] {
   const tokens: Token[] = [];
@@ -63,6 +68,28 @@ function tokenize(content: string): Token[] {
     }
   }
   return tokens;
+}
+
+export function extractInlineMedia(content: string): InlineMediaRef[] {
+  return tokenize(content)
+    .filter((t) => t.kind === "media")
+    .map((t) => ({ src: t.value, alt: t.alt }));
+}
+
+export function stripInlineMedia(content: string): string {
+  const tokens = tokenize(content).filter((t) => t.kind === "media");
+  if (tokens.length === 0) return content;
+  let out = "";
+  let cursor = 0;
+  for (const t of tokens) {
+    out += content.slice(cursor, t.start);
+    cursor = t.end;
+  }
+  out += content.slice(cursor);
+  return out
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
 
 function renderInlineRefs(content: string) {

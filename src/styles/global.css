@@ -4835,6 +4835,13 @@ input, textarea { font-family: inherit; color: inherit; }
   max-width: 360px;
   margin: 4px 0;
 }
+.block-media-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 6px 0 0 20px;
+}
 .asset-error { color: var(--danger); font-size: 12px; }
 .asset-loading { color: var(--fg-muted); font-size: 12px; }
 .pdf-library-main-header {

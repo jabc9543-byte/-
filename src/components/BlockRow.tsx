@@ -10,7 +10,8 @@ import { useIsTouch } from "../hooks/useMediaQuery";
 import { QueryEmbed } from "./QueryEmbed";
 import { BlockEmbed } from "./BlockEmbed";
 import { TaskMarkerPill } from "./TaskMarkerPill";
-import { InlineRefs } from "./InlineRefs";
+import { AssetMedia } from "./AssetMedia";
+import { InlineRefs, extractInlineMedia, stripInlineMedia } from "./InlineRefs";
 import { logMobileDebug } from "../utils/mobileDebug";
 import {
   setActiveMobileEditor,
@@ -393,6 +394,8 @@ function BlockRowImpl({ block }: Props) {
         : dropPos === "child"
           ? " drop-child"
           : "";
+    const mediaRefs = extractInlineMedia(value);
+    const previewText = stripInlineMedia(value);
 
   return (
     <div
@@ -540,7 +543,7 @@ function BlockRowImpl({ block }: Props) {
               data-gramm_editor="false"
               data-enable-grammarly="false"
             />
-            {!focused && value.trim().length > 0 && (
+            {!focused && previewText.trim().length > 0 && (
               <div
                 className="block-preview"
                 onClick={(e) => {
@@ -551,7 +554,7 @@ function BlockRowImpl({ block }: Props) {
                   ref.current?.focus();
                 }}
               >
-                <InlineRefs content={value} />
+                <InlineRefs content={previewText} />
               </div>
             )}
           </div>
@@ -614,6 +617,17 @@ function BlockRowImpl({ block }: Props) {
             <span className="date-pill date-deadline">⏰ {block.deadline}</span>
           )}
         </div>
+        {mediaRefs.length > 0 && (
+          <div className="block-media-list">
+            {mediaRefs.map((media, index) => (
+              <AssetMedia
+                key={`${block.id}-media-${index}-${media.src}`}
+                src={media.src}
+                alt={media.alt}
+              />
+            ))}
+          </div>
+        )}
         {extractQueries(block.content).map((q, i) => (
           <QueryEmbed key={`${block.id}-q-${i}`} query={q} />
         ))}
