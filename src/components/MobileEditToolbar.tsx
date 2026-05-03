@@ -215,12 +215,17 @@ export function MobileEditToolbar() {
       // Stop is handled by the global RecordingOverlay, not by this
       // button — so the mic just starts new recordings.
       if (recording) return;
+      logMobileDebug("mobile-toolbar.record", "start", { blockId });
 
       const ok = await confirmPermission({
         title: "申请录音权限",
         description: "应用将使用麦克风录制语音，并把录音直接保存到当前块。",
         details: "首次使用时，系统会再次询问是否允许访问麦克风。",
         rememberKey: "microphone",
+      });
+      logMobileDebug("mobile-toolbar.record", "permission resolved", {
+        blockId,
+        ok,
       });
       if (!ok) return;
 
@@ -235,6 +240,10 @@ export function MobileEditToolbar() {
 
       const recordingId = `rec-${Date.now()}`;
       try {
+        logMobileDebug("mobile-toolbar.record", "beginRecording call", {
+          blockId: targetBlockId,
+          recordingId,
+        });
         await beginRecording(recordingId, async (blob, mime) => {
           const ext = extForMime(mime);
           const ts = new Date()
@@ -255,6 +264,7 @@ export function MobileEditToolbar() {
         logMobileDebug("mobile-toolbar.record.started", recordingId);
         return;
       } catch (err) {
+        logMobileDebug("mobile-toolbar.record.begin-failed", String(err));
         logMobileDebug("mobile-toolbar.record.in-app-failed", String(err));
       }
 

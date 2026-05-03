@@ -8,6 +8,8 @@ import { useGraphStore } from "./stores/graph";
 import { usePageStore } from "./stores/page";
 import { useWhiteboardStore } from "./stores/whiteboard";
 import { logMobileDebug } from "./utils/mobileDebug";
+import { getCurrentPermissionRequest } from "./utils/permissionConfirm";
+import { getActiveRecording } from "./utils/recorder";
 
 export default function App() {
   const graph = useGraphStore((s) => s.graph);
@@ -22,7 +24,14 @@ export default function App() {
     const active = document.activeElement;
     const editorFocused =
       active instanceof HTMLTextAreaElement && active.classList.contains("block-editor");
-    return editorFocused || usePageStore.getState().pendingBlockWrites > 0;
+    const permissionDialogOpen = !!getCurrentPermissionRequest();
+    const recordingActive = !!getActiveRecording();
+    return (
+      editorFocused ||
+      permissionDialogOpen ||
+      recordingActive ||
+      usePageStore.getState().pendingBlockWrites > 0
+    );
   };
 
   const reloadActiveGraphViews = async (reason: string) => {
