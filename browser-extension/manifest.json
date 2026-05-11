@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "全视维 Clipper",
+  "short_name": "QSW Clipper",
+  "version": "0.1.0",
+  "description": "把当前页面/选中文字一键剪藏到本机运行的全视维（Quanshiwei）。需要桌面端已启动。",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus", "notifications"],
+  "host_permissions": ["http://127.0.0.1:33333/*"],
+  "action": {
+    "default_title": "剪藏到全视维",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  }
+}

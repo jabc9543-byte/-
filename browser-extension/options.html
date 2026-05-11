@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>全视维 Clipper 设置</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 480px; padding: 16px; }
+      label { display: block; margin: 8px 0 4px; }
+      input { width: 100%; padding: 6px; font-family: monospace; box-sizing: border-box; }
+      button { margin-top: 12px; padding: 6px 14px; }
+      #status { margin-top: 12px; font-size: 13px; color: #666; }
+    </style>
+  </head>
+  <body>
+    <h1>全视维 Clipper</h1>
+    <p>把桌面端 ▸ 插件设置页面 ▸ <strong>HTTP Clipper</strong> 选项卡里看到的访问令牌粘到这里。</p>
+    <label>访问令牌</label>
+    <input id="token" type="password" autocomplete="off" />
+    <button id="save">保存</button>
+    <button id="test">测试连接</button>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

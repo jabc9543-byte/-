@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>全视维 Clipper</title>
+    <style>
+      body { font-family: system-ui, sans-serif; width: 280px; padding: 12px; font-size: 13px; }
+      h1 { font-size: 14px; margin: 0 0 8px 0; }
+      label { display: block; margin: 8px 0 4px 0; }
+      input[type=password], input[type=text] { width: 100%; box-sizing: border-box; padding: 4px 6px; font-family: monospace; }
+      button { margin-top: 8px; padding: 6px 10px; cursor: pointer; }
+      .row { display: flex; gap: 6px; }
+      .row button { flex: 1; }
+      #status { margin-top: 8px; min-height: 18px; font-size: 12px; color: #666; }
+      .ok { color: #0a0; }
+      .err { color: #c00; }
+      a { color: #06c; }
+    </style>
+  </head>
+  <body>
+    <h1>全视维 Clipper</h1>
+
+    <label for="token">访问令牌 (X-Clip-Token)</label>
+    <input id="token" type="password" autocomplete="off" placeholder="从桌面端 ▸ 插件 ▸ HTTP Clipper 复制" />
+
+    <div class="row">
+      <button id="save">保存</button>
+      <button id="health">测试连接</button>
+    </div>
+
+    <button id="clip" style="width: 100%; margin-top: 12px; font-weight: 600;">剪藏当前页面</button>
+    <button id="clip-sel" style="width: 100%; margin-top: 6px;">仅剪藏所选文字</button>
+
+    <div id="status"></div>
+
+    <p style="font-size: 11px; color: #888; margin-top: 12px;">
+      桌面端需已运行并在 <code>127.0.0.1:33333</code> 监听。
+    </p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
