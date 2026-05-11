@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { usePluginStore, type MarketplaceEntry } from "../stores/plugins";
+import { BUNDLED_PLUGINS } from "../plugins/bundled";
 
 export function PluginManager({ onClose }: { onClose: () => void }) {
   const list = usePluginStore((s) => s.list);
@@ -19,6 +20,7 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
   const removeRegistry = usePluginStore((s) => s.removeRegistry);
   const refreshMarketplace = usePluginStore((s) => s.refreshMarketplace);
   const installFromMarketplace = usePluginStore((s) => s.installFromMarketplace);
+  const installBundled = usePluginStore((s) => s.installBundled);
 
   const [tab, setTab] = useState<"installed" | "market" | "clipper">("installed");
   const [newUrl, setNewUrl] = useState("");
@@ -191,6 +193,63 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
 
       {tab === "market" && (
         <div className="plugin-marketplace">
+          <div className="plugin-recommended">
+            <h4>✨ 推荐插件（内置，一键安装）</h4>
+            <ul className="plugin-market-list">
+              {BUNDLED_PLUGINS.map(({ manifest, source }) => {
+                const installedVer = installedById.get(manifest.id);
+                const isInstalled = installedVer !== undefined;
+                const hasUpdate = isInstalled && installedVer !== manifest.version;
+                const disabled = busy === manifest.id || (isInstalled && !hasUpdate);
+                return (
+                  <li key={manifest.id} className="plugin-market-item">
+                    <div className="plugin-title">
+                      <span className="plugin-name">{manifest.name}</span>
+                      <span className="plugin-version">v{manifest.version}</span>
+                      {isInstalled && !hasUpdate && (
+                        <span className="plugin-market-badge installed">已安装</span>
+                      )}
+                      {hasUpdate && (
+                        <span className="plugin-market-badge update">
+                          更新（{installedVer} → {manifest.version}）
+                        </span>
+                      )}
+                    </div>
+                    <p className="plugin-desc">{manifest.description}</p>
+                    <div className="plugin-perms">
+                      {manifest.permissions.map((pm) => (
+                        <span key={pm} className="plugin-perm">{pm}</span>
+                      ))}
+                    </div>
+                    <div className="plugin-actions">
+                      <button
+                        className="plugin-market-install"
+                        disabled={disabled}
+                        onClick={async () => {
+                          setBusy(manifest.id);
+                          try {
+                            await installBundled(manifest, source);
+                          } catch (e) {
+                            alert(`安装失败：${String(e)}`);
+                          } finally {
+                            setBusy(null);
+                          }
+                        }}
+                      >
+                        {busy === manifest.id
+                          ? "安装中…"
+                          : hasUpdate
+                            ? "更新"
+                            : isInstalled
+                              ? "已安装"
+                              : "安装"}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
           <div className="plugin-registry-controls">
             <input
               className="plugin-registry-input"

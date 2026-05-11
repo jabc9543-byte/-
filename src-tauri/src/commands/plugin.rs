@@ -121,6 +121,46 @@ pub async fn install_plugin(
     install_plugin_impl(&state, &src_dir)
 }
 
+/// Install a plugin whose source has been bundled directly into the host
+/// binary (no zip download, no folder picker). Used by the "Recommended
+/// plugins" section of the plugin manager to ship first-party plugins.
+#[tauri::command]
+pub async fn install_bundled_plugin(
+    manifest: PluginManifest,
+    main_js: String,
+    state: State<'_, AppState>,
+) -> AppResult<PluginEntry> {
+    validate_id(&manifest.id)?;
+    let dest = plugin_root(&state)?.join(&manifest.id);
+    if dest.exists() {
+        fs::remove_dir_all(&dest)?;
+    }
+    fs::create_dir_all(&dest)?;
+    let manifest_json = serde_json::to_string_pretty(&manifest)?;
+    fs::write(dest.join("plugin.json"), manifest_json)?;
+    let entry_name = if manifest.entry.is_empty() {
+        "main.js".to_string()
+    } else {
+        manifest.entry.clone()
+    };
+    // Guard against path traversal in the manifest-supplied entry name.
+    if entry_name.contains('/') || entry_name.contains('\\') || entry_name.contains("..") {
+        return Err(AppError::Invalid(format!("invalid entry path: {entry_name}")));
+    }
+    fs::write(dest.join(&entry_name), main_js)?;
+
+    let mut reg = read_registry(&state)?;
+    reg.retain(|e| e.manifest.id != manifest.id);
+    let entry = PluginEntry {
+        manifest,
+        enabled: true,
+        installed_at: Utc::now().to_rfc3339(),
+    };
+    reg.push(entry.clone());
+    write_registry(&state, &reg)?;
+    Ok(entry)
+}
+
 /// Shared install path used by both `install_plugin` (local folder) and the
 /// marketplace (downloaded + extracted archive). The folder at `src_dir`
 /// must contain a valid `plugin.json` at its root.

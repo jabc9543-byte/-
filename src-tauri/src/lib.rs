@@ -132,6 +132,7 @@ pub fn run() {
             commands::clipper::receive_clip,
             commands::plugin::list_plugins,
             commands::plugin::install_plugin,
+            commands::plugin::install_bundled_plugin,
             commands::plugin::uninstall_plugin,
             commands::plugin::set_plugin_enabled,
             commands::plugin::read_plugin_main,

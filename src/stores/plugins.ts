@@ -106,6 +106,7 @@ interface PluginState {
   removeRegistry: (url: string) => void;
   refreshMarketplace: () => Promise<void>;
   installFromMarketplace: (entry: MarketplaceEntry) => Promise<void>;
+  installBundled: (manifest: PluginManifest, source: string) => Promise<void>;
 }
 
 const live = new Map<string, LivePlugin>();
@@ -459,6 +460,11 @@ export const usePluginStore = create<PluginState>((set, get) => ({
 
   installFromMarketplace: async (entry) => {
     await invoke<PluginEntry>("install_plugin_from_url", { entry });
+    await get().refresh();
+  },
+
+  installBundled: async (manifest, source) => {
+    await invoke<PluginEntry>("install_bundled_plugin", { manifest, mainJs: source });
     await get().refresh();
   },
 }));
