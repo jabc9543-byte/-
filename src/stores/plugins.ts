@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { api } from "../api";
+import { BUILTIN_MARKETPLACE } from "../plugins/builtinMarketplace";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore â€?Vite worker URL import.
+// @ts-ignore ï¼ Vite worker URL import.
 import PluginWorker from "../plugins/pluginWorker.ts?worker&inline";
 
 export interface PluginManifest {
@@ -222,6 +223,9 @@ async function dispatchRpc(
   const needsWrite = () => {
     if (!perms.has("writeBlocks")) throw new Error("missing permission: writeBlocks");
   };
+  const needsNet = () => {
+    if (!perms.has("http")) throw new Error("missing permission: http");
+  };
   switch (method) {
     case "listPages":
       needsRead();
@@ -232,6 +236,19 @@ async function dispatchRpc(
     case "getBlock":
       needsRead();
       return api.getBlock(String(args[0]));
+    case "getCurrentPage": {
+      needsRead();
+      const { usePageStore } = await import("./page");
+      const id = usePageStore.getState().activePageId;
+      if (!id) return null;
+      return api.getPage(id);
+    }
+    case "todayJournal":
+      needsRead();
+      return api.todayJournal();
+    case "runQuery":
+      needsRead();
+      return api.runQuery(String(args[0]));
     case "search":
       needsRead();
       return api.search(String(args[0]), Number(args[1] ?? 30));
@@ -246,6 +263,50 @@ async function dispatchRpc(
         (args[2] as string | null) ?? null,
         String(args[3]),
       );
+    case "insertSibling": {
+      needsWrite();
+      const afterId = String(args[0]);
+      const content = String(args[1]);
+      const after = await api.getBlock(afterId);
+      if (!after) throw new Error(`block not found: ${afterId}`);
+      return api.insertBlock(after.page_id, after.parent_id, afterId, content);
+    }
+    case "receiveClip": {
+      needsWrite();
+      const payload = (args[0] ?? {}) as Record<string, unknown>;
+      return invoke("receive_clip", { payload });
+    }
+    case "httpFetch": {
+      needsNet();
+      const url = String(args[0]);
+      if (!/^https?:\/\//i.test(url)) throw new Error("only http(s) URLs allowed");
+      const init = (args[1] ?? {}) as {
+        method?: string;
+        headers?: Record<string, string>;
+        body?: string;
+      };
+      const ac = new AbortController();
+      const timeout = setTimeout(() => ac.abort(), 20_000);
+      try {
+        const res = await fetch(url, {
+          method: init.method ?? "GET",
+          headers: init.headers,
+          body: init.body,
+          signal: ac.signal,
+        });
+        const text = await res.text();
+        const headers: Record<string, string> = {};
+        res.headers.forEach((v, k) => {
+          headers[k] = v;
+        });
+        if (text.length > 2 * 1024 * 1024) {
+          throw new Error("response body exceeds 2 MiB cap");
+        }
+        return { status: res.status, headers, body: text };
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
     default:
       throw new Error(`unknown rpc method: ${method}`);
   }
@@ -257,7 +318,7 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   slashCommands: [],
   notifications: [],
   registries: loadRegistries(),
-  listings: [],
+  listings: [BUILTIN_MARKETPLACE],
   marketLoading: false,
   marketError: null,
 
@@ -335,12 +396,8 @@ export const usePluginStore = create<PluginState>((set, get) => ({
 
   refreshMarketplace: async () => {
     const urls = get().registries;
-    if (urls.length === 0) {
-      set({ listings: [], marketError: null });
-      return;
-    }
     set({ marketLoading: true, marketError: null });
-    const listings: MarketplaceListing[] = [];
+    const listings: MarketplaceListing[] = [BUILTIN_MARKETPLACE];
     let firstErr: string | null = null;
     for (const url of urls) {
       try {

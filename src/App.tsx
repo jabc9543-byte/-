@@ -122,6 +122,16 @@ export default function App() {
   }, [hydrate]);
 
   useEffect(() => {
+    // Register clipper deep-link receiver once. Safe no-op on platforms that
+    // don't expose the plugin (e.g. web preview).
+    void import("./plugins/clipperReceiver").then((m) =>
+      m.initClipperReceiver().catch((e) => {
+        console.warn("[app] clipper receiver init failed", e);
+      }),
+    );
+  }, []);
+
+  useEffect(() => {
     const onError = (event: ErrorEvent) => {
       logMobileDebug("window.error", event.message || "unknown error", {
         filename: event.filename,

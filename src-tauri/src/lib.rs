@@ -31,6 +31,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::graph::open_graph,
@@ -128,6 +129,7 @@ pub fn run() {
             commands::pdf::list_pdf_annotations,
             commands::pdf::save_pdf_annotations,
             commands::pdf::import_zotero_bibtex,
+            commands::clipper::receive_clip,
             commands::plugin::list_plugins,
             commands::plugin::install_plugin,
             commands::plugin::uninstall_plugin,

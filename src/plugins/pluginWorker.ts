@@ -39,7 +39,13 @@ interface PluginApi {
     getBlock(id: string): Promise<unknown>;
     updateBlock(id: string, content: string): Promise<unknown>;
     insertBlock(page: string, parent: string | null, after: string | null, content: string): Promise<unknown>;
+    insertSibling(afterId: string, content: string): Promise<unknown>;
     search(query: string, limit?: number): Promise<unknown>;
+    runQuery(query: string): Promise<unknown>;
+    todayJournal(): Promise<unknown>;
+    getCurrentPage(): Promise<unknown>;
+    httpFetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; headers: Record<string, string>; body: string }>;
+    receiveClip(payload: { title: string; url: string; body: string; tags?: string[]; mode?: "page" | "journal" }): Promise<unknown>;
     notify(message: string): void;
   };
 }
@@ -86,7 +92,18 @@ function buildApi(manifest: unknown): PluginApi {
       getBlock: (id) => rpc("getBlock", [id]),
       updateBlock: (id, c) => rpc("updateBlock", [id, c]),
       insertBlock: (p, parent, after, c) => rpc("insertBlock", [p, parent, after, c]),
+      insertSibling: (afterId, c) => rpc("insertSibling", [afterId, c]),
       search: (q, limit = 30) => rpc("search", [q, limit]),
+      runQuery: (q) => rpc("runQuery", [q]),
+      todayJournal: () => rpc("todayJournal"),
+      getCurrentPage: () => rpc("getCurrentPage"),
+      httpFetch: (url, init) =>
+        rpc("httpFetch", [url, init ?? {}]) as Promise<{
+          status: number;
+          headers: Record<string, string>;
+          body: string;
+        }>,
+      receiveClip: (payload) => rpc("receiveClip", [payload]),
       notify: (message) => {
         self.postMessage({ __rs_notify: true, message });
       },

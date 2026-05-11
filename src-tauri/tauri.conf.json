@@ -90,5 +90,17 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["quanshiwei", "lsrs"]
+      },
+      "mobile": [
+        {
+          "host": "clip.quanshiwei.app",
+          "pathPrefix": ["/"]
+        }
+      ]
+    }
+  }
 }

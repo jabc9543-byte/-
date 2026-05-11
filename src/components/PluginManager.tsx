@@ -20,7 +20,7 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
   const refreshMarketplace = usePluginStore((s) => s.refreshMarketplace);
   const installFromMarketplace = usePluginStore((s) => s.installFromMarketplace);
 
-  const [tab, setTab] = useState<"installed" | "market">("installed");
+  const [tab, setTab] = useState<"installed" | "market" | "clipper">("installed");
   const [newUrl, setNewUrl] = useState("");
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -30,10 +30,10 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
   }, [refresh]);
 
   useEffect(() => {
-    if (tab === "market" && listings.length === 0 && registries.length > 0) {
+    if (tab === "market") {
       refreshMarketplace().catch(() => {});
     }
-  }, [tab, listings.length, registries.length, refreshMarketplace]);
+  }, [tab, refreshMarketplace]);
 
   const onInstall = async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -105,6 +105,12 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
           onClick={() => setTab("market")}
         >
           插件市场
+        </button>
+        <button
+          className={tab === "clipper" ? "active" : ""}
+          onClick={() => setTab("clipper")}
+        >
+          Web Clipper
         </button>
       </div>
 
@@ -306,6 +312,71 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
           </ul>
         </div>
       )}
+
+      {tab === "clipper" && <ClipperPanel />}
+    </div>
+  );
+}
+
+function ClipperPanel() {
+  const [copied, setCopied] = useState<string | null>(null);
+  const exampleUrl =
+    "quanshiwei://clip?title=Example&url=https%3A%2F%2Fexample.com&body=Hello%20from%20clipper&tags=demo,clip";
+  const obsidianTemplate =
+    "quanshiwei://clip?title={{title}}&url={{url}}&body={{content}}&tags={{tags}}";
+  const copy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      window.setTimeout(() => setCopied(null), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+  return (
+    <div className="plugin-clipper">
+      <p>
+        全视维内置 <strong>Web Clipper 接收器</strong>，可以接收来自浏览器扩展
+        （如 <em>Obsidian Web Clipper</em>）的剪藏，写入今日 journal 或新建页面。
+      </p>
+      <h4>1. URL Scheme</h4>
+      <p>系统已注册 <code>quanshiwei://</code>（兼容 <code>lsrs://</code>）协议：</p>
+      <pre className="plugin-clipper-code">
+        {`quanshiwei://clip?title=<标题>&url=<原文 URL>&body=<Markdown 正文>&tags=<标签,逗号分隔>&mode=<page|journal>`}
+      </pre>
+      <p className="plugin-clipper-hint">
+        所有参数都需 URL 编码。省略 <code>mode</code> 时：有标题→新建页面；无标题→
+        追加到今日 journal。
+      </p>
+      <h4>2. 测试链接</h4>
+      <div className="plugin-clipper-actions">
+        <code className="plugin-clipper-example">{exampleUrl}</code>
+        <button onClick={() => copy(exampleUrl, "example")}>
+          {copied === "example" ? "已复制" : "复制"}
+        </button>
+      </div>
+      <h4>3. Obsidian Web Clipper 配置</h4>
+      <ol className="plugin-clipper-steps">
+        <li>在浏览器安装 <strong>Obsidian Web Clipper</strong>。</li>
+        <li>新建一个 Template，将 Behavior 设为 <code>Open in browser</code>（或自定义 URL）。</li>
+        <li>把 URL 模板设置为：</li>
+      </ol>
+      <div className="plugin-clipper-actions">
+        <code className="plugin-clipper-example">{obsidianTemplate}</code>
+        <button onClick={() => copy(obsidianTemplate, "template")}>
+          {copied === "template" ? "已复制" : "复制"}
+        </button>
+      </div>
+      <p className="plugin-clipper-hint">
+        如果模板里使用 Markdown 转 Frontmatter 字段（如 <code>{"{{ tags|join:\",\" }}"}</code>），
+        请确保最终是逗号分隔的字符串。
+      </p>
+      <h4>4. 安全说明</h4>
+      <ul className="plugin-clipper-notes">
+        <li>剪藏内容以纯文本写入，<strong>不会执行</strong>任何脚本。</li>
+        <li>仅 <code>quanshiwei</code> / <code>lsrs</code> 两个 scheme 会被处理。</li>
+        <li>桌面端首次使用需在系统中允许应用注册协议。</li>
+      </ul>
     </div>
   );
 }

@@ -2,6 +2,7 @@ pub mod assets;
 pub mod backup;
 pub mod ai;
 pub mod block;
+pub mod clipper;
 pub mod comments;
 pub mod dashboard;
 pub mod encryption;
