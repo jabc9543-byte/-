@@ -115,12 +115,10 @@ fn render_clip(payload: &ClipPayload) -> String {
     s
 }
 
-/// Persist a clipped article into the active graph.
-#[tauri::command]
-pub async fn receive_clip(
-    payload: ClipPayload,
-    state: State<'_, AppState>,
-) -> AppResult<ClipResult> {
+/// Inner implementation shared by the Tauri `receive_clip` command and the
+/// local HTTP receiver. Takes a borrowed `AppState` so both call sites can
+/// reach into it directly without going through `tauri::State`.
+pub async fn apply_clip(payload: ClipPayload, state: &AppState) -> AppResult<ClipResult> {
     let g = state.current()?;
     let backend = &g.backend;
 
@@ -178,4 +176,13 @@ pub async fn receive_clip(
             })
         }
     }
+}
+
+/// Persist a clipped article into the active graph.
+#[tauri::command]
+pub async fn receive_clip(
+    payload: ClipPayload,
+    state: State<'_, AppState>,
+) -> AppResult<ClipResult> {
+    apply_clip(payload, state.inner()).await
 }

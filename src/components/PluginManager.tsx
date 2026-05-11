@@ -390,6 +390,23 @@ function ClipperPanel() {
     "quanshiwei://clip?title=Example&url=https%3A%2F%2Fexample.com&body=Hello%20from%20clipper&tags=demo,clip";
   const obsidianTemplate =
     "quanshiwei://clip?title={{title}}&url={{url}}&body={{content}}&tags={{tags}}";
+  const httpEndpoint = "http://127.0.0.1:33333/clip";
+  const curlSample =
+    "curl -X POST http://127.0.0.1:33333/clip \\\n" +
+    "  -H 'content-type: application/json' \\\n" +
+    "  -d '{\"title\":\"Example\",\"url\":\"https://example.com\",\"body\":\"Hello from clipper\",\"tags\":[\"demo\"]}'";
+  const fetchSample =
+    "// In a browser-extension content script or background worker:\n" +
+    "await fetch(\"http://127.0.0.1:33333/clip\", {\n" +
+    "  method: \"POST\",\n" +
+    "  headers: { \"content-type\": \"application/json\" },\n" +
+    "  body: JSON.stringify({\n" +
+    "    title: document.title,\n" +
+    "    url: location.href,\n" +
+    "    body: selectedMarkdown,\n" +
+    "    tags: [\"clipped\"]\n" +
+    "  })\n" +
+    "});";
   const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -405,22 +422,68 @@ function ClipperPanel() {
         全视维内置 <strong>Web Clipper 接收器</strong>，可以接收来自浏览器扩展
         （如 <em>Obsidian Web Clipper</em>）的剪藏，写入今日 journal 或新建页面。
       </p>
-      <h4>1. URL Scheme</h4>
+      <p>
+        支持两条接收通道：<strong>本地 HTTP 端口</strong>（推荐，免协议提示）
+        和 <strong>URL Scheme</strong>（兼容现有 Obsidian Web Clipper 模板）。
+      </p>
+
+      <h4>1. 本地 HTTP 端口（推荐）</h4>
+      <p>
+        应用启动后会在 <code>{httpEndpoint}</code> 监听 <code>POST</code> 请求，
+        仅绑定 <code>127.0.0.1</code>，局域网内其它设备无法访问。
+      </p>
+      <div className="plugin-clipper-actions">
+        <code className="plugin-clipper-example">{httpEndpoint}</code>
+        <button onClick={() => copy(httpEndpoint, "endpoint")}>
+          {copied === "endpoint" ? "已复制" : "复制 URL"}
+        </button>
+      </div>
+      <p>请求体（JSON）：</p>
+      <pre className="plugin-clipper-code">
+{`{
+  "title":  "<标题>",
+  "url":    "<原文 URL>",
+  "body":   "<Markdown 正文>",
+  "tags":   ["tag1", "tag2"],
+  "mode":   "page" | "journal"   // 可选，缺省同 URL scheme 规则
+}`}
+      </pre>
+      <p>命令行测试：</p>
+      <div className="plugin-clipper-actions">
+        <pre className="plugin-clipper-code plugin-clipper-snippet">{curlSample}</pre>
+        <button onClick={() => copy(curlSample, "curl")}>
+          {copied === "curl" ? "已复制" : "复制"}
+        </button>
+      </div>
+      <p>浏览器扩展中调用：</p>
+      <div className="plugin-clipper-actions">
+        <pre className="plugin-clipper-code plugin-clipper-snippet">{fetchSample}</pre>
+        <button onClick={() => copy(fetchSample, "fetch")}>
+          {copied === "fetch" ? "已复制" : "复制"}
+        </button>
+      </div>
+      <p className="plugin-clipper-hint">
+        健康检查：<code>GET http://127.0.0.1:33333/health</code> 返回
+        <code>{` {"ok":true,"service":"quanshiwei-clipper"} `}</code>。
+      </p>
+
+      <h4>2. URL Scheme（备选）</h4>
       <p>系统已注册 <code>quanshiwei://</code>（兼容 <code>lsrs://</code>）协议：</p>
       <pre className="plugin-clipper-code">
         {`quanshiwei://clip?title=<标题>&url=<原文 URL>&body=<Markdown 正文>&tags=<标签,逗号分隔>&mode=<page|journal>`}
       </pre>
       <p className="plugin-clipper-hint">
         所有参数都需 URL 编码。省略 <code>mode</code> 时：有标题→新建页面；无标题→
-        追加到今日 journal。
+        追加到今日 journal。Scheme 通道适合"用户点击链接"场景；自动化场景请优先
+        使用 HTTP 端口。
       </p>
-      <h4>2. 测试链接</h4>
       <div className="plugin-clipper-actions">
         <code className="plugin-clipper-example">{exampleUrl}</code>
         <button onClick={() => copy(exampleUrl, "example")}>
           {copied === "example" ? "已复制" : "复制"}
         </button>
       </div>
+
       <h4>3. Obsidian Web Clipper 配置</h4>
       <ol className="plugin-clipper-steps">
         <li>在浏览器安装 <strong>Obsidian Web Clipper</strong>。</li>
@@ -437,11 +500,14 @@ function ClipperPanel() {
         如果模板里使用 Markdown 转 Frontmatter 字段（如 <code>{"{{ tags|join:\",\" }}"}</code>），
         请确保最终是逗号分隔的字符串。
       </p>
+
       <h4>4. 安全说明</h4>
       <ul className="plugin-clipper-notes">
+        <li>HTTP 端口仅绑定 <code>127.0.0.1</code>，外部主机无法访问。</li>
+        <li>单次请求体上限 4 MiB，读取超时 15 秒。</li>
         <li>剪藏内容以纯文本写入，<strong>不会执行</strong>任何脚本。</li>
         <li>仅 <code>quanshiwei</code> / <code>lsrs</code> 两个 scheme 会被处理。</li>
-        <li>桌面端首次使用需在系统中允许应用注册协议。</li>
+        <li>桌面端首次使用 Scheme 通道需在系统中允许应用注册协议。</li>
       </ul>
     </div>
   );

@@ -140,6 +140,13 @@ pub fn run() {
             commands::update::check_for_update,
             commands::update::install_update,
         ])
+        .setup(|app| {
+            // Start the local HTTP receiver for Web Clipper requests on
+            // 127.0.0.1:33333. Bind failures are non-fatal — the
+            // `quanshiwei://` deep-link path keeps working.
+            commands::clip_http::spawn(app.handle().clone());
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
