@@ -184,6 +184,10 @@ class Vault {
   getAbstractFileByPath(path: string) {
     return { path };
   }
+  getFileByPath(path: string) {
+    // Obsidian's newer API; alias of getAbstractFileByPath for our purposes.
+    return { path, name: path.split("/").pop() ?? path, basename: (path.split("/").pop() ?? path).replace(/\.[^/.]+$/, ""), extension: (path.match(/\.([^.]+)$/)?.[1] ?? "") };
+  }
   getFiles() {
     return [] as { path: string }[];
   }
@@ -191,6 +195,20 @@ class Vault {
     /* event subscription not wired */
     return { unsubscribe() {} };
   }
+  off(_evt: string, _cb: unknown) {
+    /* no-op — event system is not wired */
+  }
+}
+
+// A tiny stub leaf — methods return permissive defaults so plugin code that
+// chains `.openFile()`, `.setViewState()`, etc. doesn't crash. View rendering
+// is still not implemented; the leaf exists only to satisfy type contracts.
+function makeLeafStub(): Record<string, (...args: unknown[]) => unknown> {
+  const leaf: Record<string, (...args: unknown[]) => unknown> = {};
+  const methods = ["openFile", "setViewState", "getViewState", "detach", "on", "off"];
+  for (const m of methods) leaf[m] = () => undefined;
+  leaf.view = (() => null) as never;
+  return leaf;
 }
 
 class Workspace {
@@ -205,8 +223,46 @@ class Workspace {
   on(_evt: string, _cb: unknown) {
     return { unsubscribe() {} };
   }
+  off(_evt: string, _cb: unknown) {
+    /* no-op */
+  }
+  trigger(_evt: string, ..._args: unknown[]) {
+    /* event broadcast not wired */
+  }
   iterateAllLeaves(_cb: unknown) {
     /* no leaves */
+  }
+  // --- leaf accessors (all return inert stubs) ---
+  getLeaf(_newLeaf?: boolean | string) {
+    return makeLeafStub();
+  }
+  getLeftLeaf(_split?: boolean) {
+    return makeLeafStub();
+  }
+  getRightLeaf(_split?: boolean) {
+    return makeLeafStub();
+  }
+  getLeavesOfType(_type: string) {
+    return [] as ReturnType<typeof makeLeafStub>[];
+  }
+  getMostRecentLeaf() {
+    return makeLeafStub();
+  }
+  revealLeaf(_leaf: unknown) {
+    /* no-op */
+  }
+  detachLeavesOfType(_type: string) {
+    /* no-op */
+  }
+  ensureSideLeaf(_type: string, _side: string, _opts?: unknown) {
+    /* no-op */
+  }
+  // --- hover-link source registry (used by Recent Files, file-explorer, etc.) ---
+  registerHoverLinkSource(_id: string, _info: unknown) {
+    /* no-op */
+  }
+  unregisterHoverLinkSource(_id: string) {
+    /* no-op */
   }
 }
 
@@ -216,15 +272,30 @@ class App {
   metadataCache = {
     getFileCache: () => null,
     getCache: () => null,
+    getFirstLinkpathDest: () => null,
     on() {
       return { unsubscribe() {} };
     },
   };
   fileManager = {
     renameFile: notImplemented("fileManager.renameFile"),
+    generateMarkdownLink: (_file: unknown, _sourcePath: string, _subpath?: string, _alias?: string) => "",
   };
   keymap = { pushScope: () => {}, popScope: () => {} };
   scope = { register: () => {}, unregister: () => {} };
+  // Plugins like Recent Files probe `app.internalPlugins` to check whether
+  // the built-in Bookmarks plugin is enabled. We answer "not enabled".
+  internalPlugins = {
+    getEnabledPluginById: (_id: string) => null,
+    getPluginById: (_id: string) => null,
+    plugins: {},
+  };
+  // dragManager is touched by drag-and-drop code paths; we stub it out so
+  // event handlers don't crash before any drag actually occurs.
+  dragManager = {
+    dragFile: () => null,
+    onDragStart: () => {},
+  };
 }
 
 const sharedApp = new App();
@@ -383,8 +454,92 @@ const obsidianModule = {
   MarkdownView: class {},
   Editor: class {},
   WorkspaceLeaf: class {},
+  // View / ItemView throw a *clearly labelled* error instead of being
+  // `undefined`. Plugins like Recent Files do `class b extends l.ItemView`
+  // at module top level — if ItemView is missing, the cryptic
+  // "Class extends value undefined is not a constructor or null" fires
+  // before we can log anything useful.
+  View: class {
+    constructor() {
+      throw new Error("obsidian shim: View is not supported in this sandbox");
+    }
+  },
+  ItemView: class {
+    constructor() {
+      throw new Error("obsidian shim: ItemView is not supported in this sandbox");
+    }
+  },
+  // Menu / MenuItem — context-menu primitives. Stub them as inert builders so
+  // plugins can construct + populate them without crashing; they just won't
+  // visually appear.
+  Menu: class {
+    items: unknown[] = [];
+    addItem(cb: (item: { setTitle: (t: string) => unknown; setIcon: (i: string) => unknown; setSection: (s: string) => unknown; onClick: (cb: () => void) => unknown }) => void) {
+      const item = {
+        setTitle: () => item,
+        setIcon: () => item,
+        setSection: () => item,
+        onClick: () => item,
+      };
+      cb(item);
+      this.items.push(item);
+      return this;
+    }
+    addSeparator() {
+      return this;
+    }
+    showAtPosition(_pos: unknown) {
+      /* DOM unavailable */
+    }
+    showAtMouseEvent(_e: unknown) {
+      /* DOM unavailable */
+    }
+    hide() {
+      /* no-op */
+    }
+  },
+  // Keymap helpers — `isModEvent` is used by plugins to detect ctrl/cmd-click;
+  // we conservatively return `false`.
+  Keymap: {
+    isModEvent: (_e: unknown) => false,
+    isModifier: (_e: unknown, _mod: string) => false,
+  },
+  Scope: class {
+    register() {
+      return {} as { id: string };
+    }
+    unregister(_h: unknown) {
+      /* no-op */
+    }
+  },
   Platform: { isDesktop: true, isMobile: false, isMobileApp: false },
   // Stubs for utility helpers some plugins import.
+  addIcon: (_name: string, _svg: string) => {
+    /* no DOM icon registry; recorded silently */
+  },
+  setIcon: (_el: unknown, _name: string) => {
+    /* no DOM \u2014 plugins that rely on visual feedback are out of luck */
+  },
+  setTooltip: (_el: unknown, _text: string) => {
+    /* no DOM */
+  },
+  debounce: <T extends (...args: unknown[]) => unknown>(fn: T, wait = 0, _immediate = false) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const debounced = (...args: Parameters<T>) => {
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        fn(...(args as unknown[]));
+      }, wait);
+    };
+    (debounced as unknown as { cancel: () => void }).cancel = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    return debounced as unknown as T & { cancel: () => void };
+  },
   normalizePath: (p: string) => p,
   requestUrl: async (opts: { url: string; method?: string; headers?: Record<string, string>; body?: string }) => {
     const res = await rpc<{ status: number; headers: Record<string, string>; body: string }>("httpFetch", [
