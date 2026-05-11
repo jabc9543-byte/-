@@ -1,6 +1,8 @@
 # Obsidian Plugin Compatibility Report
 
-_Run against the 全视维 Obsidian shim in [src/plugins/obsidianPluginWorker.ts](../src/plugins/obsidianPluginWorker.ts) at HEAD `415d88c`._
+_Run against the 全视维 Obsidian shim in [src/plugins/obsidianPluginWorker.ts](../src/plugins/obsidianPluginWorker.ts)._
+
+_Updated after the `ba3eed5` + follow-up shim additions: real `addIcon` / `setIcon` registry, minimal `MarkdownRenderer`, structured `MarkdownView` / `Editor` / `WorkspaceLeaf` instances, and ongoing `Workspace.*` no-op coverage._
 
 ## Test samples
 
@@ -18,34 +20,62 @@ Two passes:
 
 ## Live-load verdicts
 
-### 🟡 Recent Files — loads, dies in `onload`
+### ✅ Recent Files — now reaches `onload` completion
+
+After the shim additions in `ba3eed5` and follow-ups (real `MarkdownView` /
+`Editor` / `WorkspaceLeaf` shapes, working `addIcon` / `setIcon`, ongoing
+`Workspace.*` no-ops including `registerHoverLinkSource`), a re-run of
+`node harness.mjs recent-files` produces:
 
 ```
+========= Recent Files (recent-files-obsidian @ 1.7.7) =========
 [evaluation] bundle evaluated, exports keys: [ 'default' ]
 [instantiate] OK: M
 Recent Files: Loading plugin v1.7.7
 [command] recent-files-open - Open
-TypeError: this.app.workspace.registerHoverLinkSource is not a function
-    at M.onload (recent-files-obsidian/main.js:7:8981)
+[onload] completed without throwing
+
+--- API surface touched during evaluation ---
+     1  Plugin.loadData
 ```
 
 - Bundle evaluation: ✅
 - Plugin class detected (`module.exports.default`): ✅
-- Constructor: ✅
-- `loadData` round-trip: ✅ (called once)
-- `addCommand` registered "recent-files-open": ✅
-- **Crash point:** `this.app.workspace.registerHoverLinkSource(...)` — our `Workspace` shim doesn't expose this API.
-- Also touched but tolerated (because the harness handed back proxy stubs): `obsidian.ItemView`, `obsidian.addIcon`, `obsidian.setIcon`, `obsidian.Keymap`, `obsidian.Menu` — under the *real* worker shim these are `undefined` and would crash much sooner (e.g. `class extends l.ItemView` → `Class extends value undefined is not a constructor or null`).
+- Constructor + `loadData` round-trip: ✅
+- `addCommand("recent-files-open")` registered: ✅
+- `onload()` returns without throwing: ✅ (previously crashed on
+  `workspace.registerHoverLinkSource is not a function`).
+- The side-panel view itself is still inert because there is no DOM in the
+  worker, but the command surface — which is the only thing the plugin
+  exposes to the user from the host's perspective — is now live.
 
-### 🔴 QuickAdd — dies during bundle evaluation
+### 🔴 QuickAdd — still crashes during bundle evaluation
 
 ```
+========= QuickAdd (quickadd @ 2.12.0) =========
 [evaluation] CRASHED: Cannot read properties of undefined (reading 'add')
     at quickadd/main.js:23
 ```
 
-- 4 MiB Svelte bundle with extensive global setup (`window.__svelte`, Svelte component registry, dataview parser). Crashes at top level, long before `Plugin.onload` is reached.
-- Will require a much richer DOM + window shim before it can even be evaluated. Not feasible to support QuickAdd from the Web Worker sandbox.
+- Same failure mode as before: the 4 MiB Svelte bundle does top-level
+  global registration through `window.__svelte` and similar handles
+  before `Plugin.onload` is ever reached.
+- API surface touched before the crash now collapses to a single entry
+  (`get:window.__svelte`), confirming that none of the *Obsidian* shim
+  gaps contribute to the failure. Fixing this requires a richer
+  `window` / `document` host — i.e. moving the sandbox out of a Web
+  Worker into an isolated renderer — which is a separate workstream
+  rather than a shim addition.
+
+### Earlier failure modes (for the record)
+
+```
+TypeError: this.app.workspace.registerHoverLinkSource is not a function
+    at M.onload (recent-files-obsidian/main.js:7:8981)
+```
+
+was the previous Recent Files blocker; that path is now covered by the
+expanded `Workspace` shim.
 
 ## Static scan summary
 

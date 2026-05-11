@@ -652,10 +652,112 @@ const obsidianModule = {
       this.name = idx >= 0 ? path.slice(idx + 1) : path;
     }
   },
-  TFolder: class {},
-  MarkdownView: class {},
-  Editor: class {},
-  WorkspaceLeaf: class {},
+  TFolder: class {
+    path: string;
+    name: string;
+    children: unknown[] = [];
+    parent: unknown = null;
+    constructor(path = "") {
+      this.path = path;
+      const idx = path.lastIndexOf("/");
+      this.name = idx >= 0 ? path.slice(idx + 1) : path;
+    }
+  },
+  // MarkdownView / Editor / WorkspaceLeaf — used by plugins to detect "am
+  // I attached to a real editor?". We give them inert, well-shaped
+  // instances so feature detection (`instanceof`, `view.editor`, etc.)
+  // doesn't crash. None of these mutate any real document; writes happen
+  // through `Vault.adapter` which is wired to the host.
+  MarkdownView: class {
+    file: unknown = null;
+    editor: { getValue: () => string; setValue: (v: string) => void; replaceSelection: (s: string) => void; getCursor: () => { line: number; ch: number }; getSelection: () => string };
+    constructor() {
+      let buffer = "";
+      this.editor = {
+        getValue: () => buffer,
+        setValue: (v: string) => {
+          buffer = String(v ?? "");
+        },
+        replaceSelection: (s: string) => {
+          buffer += String(s ?? "");
+        },
+        getCursor: () => ({ line: 0, ch: buffer.length }),
+        getSelection: () => "",
+      };
+    }
+    getViewType() {
+      return "markdown";
+    }
+    getMode() {
+      return "source";
+    }
+    getDisplayText() {
+      return "";
+    }
+  },
+  Editor: class {
+    private _buf = "";
+    getValue() {
+      return this._buf;
+    }
+    setValue(v: string) {
+      this._buf = String(v ?? "");
+    }
+    getLine(_n: number) {
+      return this._buf.split("\n")[_n] ?? "";
+    }
+    lineCount() {
+      return this._buf.split("\n").length;
+    }
+    getCursor() {
+      return { line: 0, ch: this._buf.length };
+    }
+    setCursor(_pos: unknown) {
+      /* no-op */
+    }
+    getSelection() {
+      return "";
+    }
+    replaceSelection(s: string) {
+      this._buf += String(s ?? "");
+    }
+    replaceRange(s: string, _from: unknown, _to?: unknown) {
+      this._buf += String(s ?? "");
+    }
+    focus() {
+      /* no-op */
+    }
+    blur() {
+      /* no-op */
+    }
+    refresh() {
+      /* no-op */
+    }
+    somethingSelected() {
+      return false;
+    }
+  },
+  WorkspaceLeaf: class {
+    view: unknown = null;
+    getViewState() {
+      return { type: "empty", state: {} };
+    }
+    setViewState(_s: unknown) {
+      return Promise.resolve();
+    }
+    detach() {
+      /* no-op */
+    }
+    open(_v: unknown) {
+      return Promise.resolve();
+    }
+    getDisplayText() {
+      return "";
+    }
+    on(_e: string, _cb: (...a: unknown[]) => void) {
+      return { id: "" };
+    }
+  },
   // View / ItemView throw a *clearly labelled* error instead of being
   // `undefined`. Plugins like Recent Files do `class b extends l.ItemView`
   // at module top level — if ItemView is missing, the cryptic

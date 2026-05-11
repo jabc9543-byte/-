@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { usePluginStore, type MarketplaceEntry } from "../stores/plugins";
 import { BUNDLED_PLUGINS } from "../plugins/bundled";
 
@@ -386,20 +387,43 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
 
 function ClipperPanel() {
   const [copied, setCopied] = useState<string | null>(null);
+  const [token, setToken] = useState<string>("");
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [showToken, setShowToken] = useState(false);
+  const [rotating, setRotating] = useState(false);
   const exampleUrl =
     "quanshiwei://clip?title=Example&url=https%3A%2F%2Fexample.com&body=Hello%20from%20clipper&tags=demo,clip";
   const obsidianTemplate =
     "quanshiwei://clip?title={{title}}&url={{url}}&body={{content}}&tags={{tags}}";
   const httpEndpoint = "http://127.0.0.1:33333/clip";
+  useEffect(() => {
+    let mounted = true;
+    invoke<string>("get_clip_token")
+      .then((t) => {
+        if (mounted) setToken(t);
+      })
+      .catch((e) => {
+        if (mounted) setTokenError(String(e));
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  const tokenDisplay = token ? (showToken ? token : "•".repeat(Math.min(token.length, 32))) : "(loading…)";
+  const tokenForSamples = token || "<paste-token-here>";
   const curlSample =
     "curl -X POST http://127.0.0.1:33333/clip \\\n" +
+    `  -H 'x-clip-token: ${tokenForSamples}' \\\n` +
     "  -H 'content-type: application/json' \\\n" +
     "  -d '{\"title\":\"Example\",\"url\":\"https://example.com\",\"body\":\"Hello from clipper\",\"tags\":[\"demo\"]}'";
   const fetchSample =
     "// In a browser-extension content script or background worker:\n" +
     "await fetch(\"http://127.0.0.1:33333/clip\", {\n" +
     "  method: \"POST\",\n" +
-    "  headers: { \"content-type\": \"application/json\" },\n" +
+    "  headers: {\n" +
+    "    \"content-type\": \"application/json\",\n" +
+    `    \"x-clip-token\": ${JSON.stringify(tokenForSamples)}\n` +
+    "  },\n" +
     "  body: JSON.stringify({\n" +
     "    title: document.title,\n" +
     "    url: location.href,\n" +
@@ -414,6 +438,20 @@ function ClipperPanel() {
       window.setTimeout(() => setCopied(null), 1500);
     } catch {
       /* ignore */
+    }
+  };
+  const rotate = async () => {
+    if (rotating) return;
+    if (!window.confirm("旋转令牌会让现有浏览器扩展配置立刻失效，确认继续？")) return;
+    setRotating(true);
+    try {
+      const fresh = await invoke<string>("rotate_clip_token");
+      setToken(fresh);
+      setShowToken(true);
+    } catch (e) {
+      setTokenError(String(e));
+    } finally {
+      setRotating(false);
     }
   };
   return (
@@ -438,6 +476,33 @@ function ClipperPanel() {
           {copied === "endpoint" ? "已复制" : "复制 URL"}
         </button>
       </div>
+
+      <h5>访问令牌</h5>
+      <p>
+        每次 <code>POST /clip</code> 必须携带 <code>X-Clip-Token</code> 请求头
+        （或 <code>?token=...</code> 查询参数）。同机器上的任何进程都能访问
+        <code>127.0.0.1</code>，所以令牌是唯一的访问控制。
+      </p>
+      {tokenError && (
+        <p className="plugin-clipper-hint" style={{ color: "#c00" }}>
+          读取令牌失败：{tokenError}
+        </p>
+      )}
+      <div className="plugin-clipper-actions">
+        <code className="plugin-clipper-example" style={{ fontFamily: "monospace", letterSpacing: "0.05em" }}>
+          {tokenDisplay}
+        </code>
+        <button onClick={() => setShowToken((v) => !v)} disabled={!token}>
+          {showToken ? "隐藏" : "显示"}
+        </button>
+        <button onClick={() => token && copy(token, "token")} disabled={!token}>
+          {copied === "token" ? "已复制" : "复制"}
+        </button>
+        <button onClick={rotate} disabled={rotating}>
+          {rotating ? "正在旋转…" : "重新生成"}
+        </button>
+      </div>
+
       <p>请求体（JSON）：</p>
       <pre className="plugin-clipper-code">
 {`{
@@ -463,7 +528,7 @@ function ClipperPanel() {
         </button>
       </div>
       <p className="plugin-clipper-hint">
-        健康检查：<code>GET http://127.0.0.1:33333/health</code> 返回
+        健康检查（不需要令牌）：<code>GET http://127.0.0.1:33333/health</code> 返回
         <code>{` {"ok":true,"service":"quanshiwei-clipper"} `}</code>。
       </p>
 
@@ -504,6 +569,8 @@ function ClipperPanel() {
       <h4>4. 安全说明</h4>
       <ul className="plugin-clipper-notes">
         <li>HTTP 端口仅绑定 <code>127.0.0.1</code>，外部主机无法访问。</li>
+        <li><code>POST /clip</code> 必须带匹配的 <code>X-Clip-Token</code>，缺失或错误返回 401。</li>
+        <li>令牌存放在 <code>app_local_data_dir/clip-token.txt</code>，由 OS 文件权限保护。</li>
         <li>单次请求体上限 4 MiB，读取超时 15 秒。</li>
         <li>剪藏内容以纯文本写入，<strong>不会执行</strong>任何脚本。</li>
         <li>仅 <code>quanshiwei</code> / <code>lsrs</code> 两个 scheme 会被处理。</li>

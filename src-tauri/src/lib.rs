@@ -130,6 +130,8 @@ pub fn run() {
             commands::pdf::save_pdf_annotations,
             commands::pdf::import_zotero_bibtex,
             commands::clipper::receive_clip,
+            commands::clip_token::get_clip_token,
+            commands::clip_token::rotate_clip_token,
             commands::plugin::list_plugins,
             commands::plugin::install_plugin,
             commands::plugin::install_bundled_plugin,
@@ -141,6 +143,11 @@ pub fn run() {
             commands::update::install_update,
         ])
         .setup(|app| {
+            // Initialise the Clipper token before the HTTP receiver starts so
+            // any race against the first incoming request is impossible.
+            if let Err(e) = commands::clip_token::load_or_init(&app.handle()) {
+                tracing::warn!(target: "clip_http", "clip token init failed: {e}");
+            }
             // Start the local HTTP receiver for Web Clipper requests on
             // 127.0.0.1:33333. Bind failures are non-fatal — the
             // `quanshiwei://` deep-link path keeps working.

@@ -184,10 +184,46 @@ const obsidian = {
   Plugin, Component, Notice, Modal, Setting, PluginSettingTab,
   App, Vault, Workspace,
   TFile: class { constructor(p = "") { this.path = p; } },
-  TFolder: class {},
-  MarkdownView: class {},
-  Editor: class {},
-  WorkspaceLeaf: class {},
+  TFolder: class { constructor(p = "") { this.path = p; this.children = []; } },
+  MarkdownView: class {
+    constructor() {
+      let buf = "";
+      this.file = null;
+      this.editor = {
+        getValue: () => buf,
+        setValue: (v) => { buf = String(v ?? ""); },
+        replaceSelection: (s) => { buf += String(s ?? ""); },
+        getCursor: () => ({ line: 0, ch: buf.length }),
+        getSelection: () => "",
+      };
+    }
+    getViewType() { return "markdown"; }
+    getMode() { return "source"; }
+    getDisplayText() { return ""; }
+  },
+  Editor: class {
+    constructor() { this._buf = ""; }
+    getValue() { return this._buf; }
+    setValue(v) { this._buf = String(v ?? ""); }
+    getLine(n) { return this._buf.split("\n")[n] ?? ""; }
+    lineCount() { return this._buf.split("\n").length; }
+    getCursor() { return { line: 0, ch: this._buf.length }; }
+    setCursor() {}
+    getSelection() { return ""; }
+    replaceSelection(s) { this._buf += String(s ?? ""); }
+    replaceRange(s) { this._buf += String(s ?? ""); }
+    focus() {} blur() {} refresh() {}
+    somethingSelected() { return false; }
+  },
+  WorkspaceLeaf: class {
+    constructor() { this.view = null; }
+    getViewState() { return { type: "empty", state: {} }; }
+    setViewState() { return Promise.resolve(); }
+    detach() {}
+    open() { return Promise.resolve(); }
+    getDisplayText() { return ""; }
+    on() { return { id: "" }; }
+  },
   View: class { constructor() { throw new Error("View not supported"); } },
   ItemView: class { constructor() { throw new Error("ItemView not supported"); } },
   Menu: class {
@@ -201,9 +237,49 @@ const obsidian = {
   Keymap: { isModEvent: () => false, isModifier: () => false },
   Scope: class { register() { return {}; } unregister() {} },
   Platform: { isDesktop: true, isMobile: false, isMobileApp: false },
-  addIcon: () => {},
-  setIcon: () => {},
+  // Mirror the worker's icon registry so plugins that rely on
+  // addIcon/setIcon actually get something useful back.
+  ...(function () {
+    const reg = new Map();
+    const writeInto = (el, html) => {
+      if (!el || typeof el !== "object") return;
+      try { if (typeof el.empty === "function") el.empty(); } catch {}
+      try { el.innerHTML = html; return; } catch {}
+      try { if (typeof el.setText === "function") el.setText(html.replace(/<[^>]+>/g, "")); return; } catch {}
+      try { el.textContent = html.replace(/<[^>]+>/g, ""); } catch {}
+    };
+    return {
+      addIcon: (name, svg) => { if (typeof name === "string" && typeof svg === "string") reg.set(name, svg); touch("addIcon"); },
+      setIcon: (el, name) => {
+        touch("setIcon");
+        const raw = reg.get(String(name));
+        if (raw !== undefined) writeInto(el, /^\s*<svg/i.test(raw) ? raw : `<svg viewBox="0 0 100 100">${raw}</svg>`);
+        else writeInto(el, `<svg viewBox="0 0 100 100"><rect/></svg>`);
+      },
+      getIconIds: () => Array.from(reg.keys()),
+    };
+  })(),
   setTooltip: () => {},
+  // Minimal MarkdownRenderer mirror.
+  MarkdownRenderer: class {
+    static async renderMarkdown(md, el) {
+      touch("MarkdownRenderer.renderMarkdown");
+      if (el && typeof el === "object") {
+        try { el.innerHTML = `<p>${String(md ?? "")}</p>`; } catch {}
+      }
+    }
+    static async render(_app, md, el) {
+      touch("MarkdownRenderer.render");
+      if (el && typeof el === "object") {
+        try { el.innerHTML = `<p>${String(md ?? "")}</p>`; } catch {}
+      }
+    }
+    static renderMarkdownSync(md, el) {
+      if (el && typeof el === "object") {
+        try { el.innerHTML = `<p>${String(md ?? "")}</p>`; } catch {}
+      }
+    }
+  },
   debounce: (fn, wait = 0) => {
     let t = null;
     const d = (...a) => { if (t) clearTimeout(t); t = setTimeout(() => { t = null; fn(...a); }, wait); };

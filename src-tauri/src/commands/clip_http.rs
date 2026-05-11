@@ -27,6 +27,7 @@ use tokio::time::timeout;
 
 use crate::state::AppState;
 use super::clipper::{apply_clip, ClipPayload};
+use super::clip_token;
 
 const CLIP_HTTP_HOST: &str = "127.0.0.1";
 pub const CLIP_HTTP_PORT: u16 = 33333;
@@ -123,6 +124,12 @@ async fn handle_conn(mut sock: TcpStream, app: AppHandle) -> std::io::Result<()>
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or("").to_ascii_uppercase();
     let path = parts.next().unwrap_or("");
+    // Strip query string for routing; keep the raw path around for token
+    // extraction.
+    let (path_only, query) = match path.split_once('?') {
+        Some((p, q)) => (p, q),
+        None => (path, ""),
+    };
 
     // CORS preflight — accept anything from a localhost browser. We don't
     // need to whitelist origins because the listener is bound to loopback,
@@ -131,14 +138,29 @@ async fn handle_conn(mut sock: TcpStream, app: AppHandle) -> std::io::Result<()>
         return write_cors_preflight(&mut sock, head_str).await;
     }
 
-    if method == "GET" && (path == "/" || path == "/health") {
+    if method == "GET" && (path_only == "/" || path_only == "/health") {
         let body = b"{\"ok\":true,\"service\":\"quanshiwei-clipper\"}";
         return write_response(&mut sock, 200, "OK", "application/json", body, true, head_str).await;
     }
 
-    if method != "POST" || path != "/clip" {
+    if method != "POST" || path_only != "/clip" {
         let body = b"{\"error\":\"not found\"}";
         return write_response(&mut sock, 404, "Not Found", "application/json", body, true, head_str).await;
+    }
+
+    // Token check — header `X-Clip-Token` or `?token=` query parameter must
+    // match the on-disk token. Without this any local process could push
+    // clips into the user's graph.
+    let expected = clip_token::load_or_init(&app).unwrap_or_default();
+    let header_token = extract_header(head_str, "x-clip-token").unwrap_or("");
+    let query_token = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("token="))
+        .unwrap_or("");
+    let supplied = if !header_token.is_empty() { header_token } else { query_token };
+    if expected.is_empty() || !clip_token::eq(supplied, &expected) {
+        let body = b"{\"error\":\"missing or invalid X-Clip-Token\"}";
+        return write_response(&mut sock, 401, "Unauthorized", "application/json", body, true, head_str).await;
     }
 
     let body = &buf[hend..];
