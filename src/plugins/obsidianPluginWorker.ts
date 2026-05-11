@@ -334,6 +334,129 @@ class Modal {
   onClose() {}
 }
 
+// SuggestModal / FuzzySuggestModal — Obsidian's command-palette-style picker.
+// Plugins typically subclass these and override `getItems`, `getItemText`,
+// `renderSuggestion`, `onChooseItem` / `onChooseSuggestion`. The real version
+// pops a DOM input and lets the user pick interactively; in this worker we
+// can't render one, but we *can* still let subclasses register and expose
+// a `submit(query)` helper that fuzzy-matches against `getItems()` and runs
+// `onChooseSuggestion` / `onChooseItem` with the best hit. The host can drive
+// it via a command (e.g. `/jump` style), which is good enough for plugins
+// that use the modal as a quick-action gate.
+
+interface SuggestModalLike<T> {
+  app: App;
+  getItems(): T[] | Promise<T[]>;
+  getItemText(item: T): string;
+  renderSuggestion?(item: T, el: unknown): void;
+  onChooseSuggestion?(item: T, evt: unknown): void;
+  onChooseItem?(item: T, evt: unknown): void;
+  inputEl?: { value: string };
+}
+
+function fuzzyScore(q: string, s: string): number {
+  if (!q) return 1;
+  const target = s.toLowerCase();
+  const needle = q.toLowerCase();
+  let ti = 0;
+  let consecutive = 0;
+  let score = 0;
+  for (let ni = 0; ni < needle.length; ni++) {
+    const c = needle[ni];
+    let found = -1;
+    for (let i = ti; i < target.length; i++) {
+      if (target[i] === c) {
+        found = i;
+        break;
+      }
+    }
+    if (found === -1) return 0;
+    consecutive = found === ti ? consecutive + 1 : 1;
+    score += 1 + consecutive * 2;
+    ti = found + 1;
+  }
+  // bonus for shorter targets (prefer "todo" over "todo-list-archived")
+  return score + Math.max(0, 30 - target.length) / 10;
+}
+
+class SuggestModal<T> extends Modal {
+  inputEl: { value: string } = { value: "" };
+  limit = 50;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getItems(): T[] | Promise<T[]> {
+    return [];
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getItemText(_item: T): string {
+    return "";
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getSuggestions(query: string): T[] | Promise<T[]> {
+    const self = this as unknown as SuggestModalLike<T>;
+    const items = self.getItems();
+    const pick = (list: T[]): T[] => {
+      const q = String(query ?? "").trim();
+      if (!q) return list.slice(0, this.limit);
+      const scored = list
+        .map((it) => ({ it, s: fuzzyScore(q, self.getItemText(it)) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, this.limit)
+        .map((x) => x.it);
+      return scored;
+    };
+    return items instanceof Promise ? items.then(pick) : pick(items as T[]);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  renderSuggestion(_item: T, _el: unknown): void {
+    /* no DOM */
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onChooseSuggestion(_item: T, _evt: unknown): void {
+    /* override in subclass */
+  }
+  setPlaceholder(_p: string) {
+    /* no-op */
+  }
+  setInstructions(_i: unknown) {
+    /* no-op */
+  }
+  // Host-driver entry point — not in the real Obsidian API. The host calls
+  // this through a command to drive the picker without a DOM. Returns the
+  // chosen item (or null if no match) so callers can await it.
+  async submit(query: string): Promise<T | null> {
+    this.inputEl.value = query;
+    const list = await Promise.resolve(this.getSuggestions(query));
+    const top = (list as T[])[0];
+    if (top === undefined) {
+      notify(`(SuggestModal) 没有匹配：${query}`);
+      return null;
+    }
+    try {
+      this.onChooseSuggestion(top, { type: "host-submit", query });
+    } catch (e) {
+      notify(`(SuggestModal) onChooseSuggestion 抛错：${String((e as Error).message ?? e)}`);
+    }
+    return top;
+  }
+}
+
+class FuzzySuggestModal<T> extends SuggestModal<T> {
+  // Real Obsidian: `onChooseItem(item, evt)` is the override target for
+  // FuzzySuggestModal; SuggestModal uses `onChooseSuggestion`. Bridge the
+  // two so subclasses overriding either one work.
+  onChooseSuggestion(item: T, evt: unknown): void {
+    const self = this as unknown as SuggestModalLike<T>;
+    if (typeof self.onChooseItem === "function") {
+      self.onChooseItem(item, evt);
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onChooseItem(_item: T, _evt: unknown): void {
+    /* override in subclass */
+  }
+}
+
 class Setting {
   constructor(_containerEl: unknown) {}
   setName(_n: string) {
@@ -636,6 +759,8 @@ const obsidianModule = {
   Component,
   Notice,
   Modal,
+  SuggestModal,
+  FuzzySuggestModal,
   Setting,
   PluginSettingTab,
   App,
