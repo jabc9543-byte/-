@@ -30,9 +30,33 @@ pub struct PluginManifest {
     #[serde(default = "default_entry")]
     pub entry: String,
     /// Capability flags. Currently recognised: "readBlocks", "writeBlocks",
-    /// "commands", "sidebar", "slashCommands".
+    /// "commands", "sidebar", "slashCommands", "http".
     #[serde(default)]
     pub permissions: Vec<String>,
+    /// Plugin runtime kind. `"native"` (default) uses the Logseq-RS API;
+    /// `"obsidian"` runs the entry as an Obsidian-style CommonJS bundle
+    /// against a best-effort `obsidian` module shim.
+    #[serde(default = "default_kind")]
+    pub kind: String,
+}
+
+fn default_kind() -> String {
+    "native".to_string()
+}
+
+/// Subset of the Obsidian `manifest.json` schema we care about. Unknown
+/// fields (minAppVersion, isDesktopOnly, fundingUrl, …) are silently
+/// ignored.
+#[derive(Debug, Clone, Deserialize)]
+struct ObsidianManifest {
+    id: String,
+    name: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    author: Option<String>,
 }
 
 fn default_entry() -> String {
@@ -106,14 +130,37 @@ pub fn install_plugin_impl(state: &AppState, src_dir: &str) -> AppResult<PluginE
         return Err(AppError::NotFound(src_dir.to_string()));
     }
     let manifest_path = src.join("plugin.json");
-    if !manifest_path.is_file() {
+    let obsidian_manifest_path = src.join("manifest.json");
+    let manifest: PluginManifest = if manifest_path.is_file() {
+        let raw = fs::read_to_string(&manifest_path)?;
+        serde_json::from_str(&raw)
+            .map_err(|e| AppError::Invalid(format!("invalid plugin.json: {e}")))?
+    } else if obsidian_manifest_path.is_file() {
+        let raw = fs::read_to_string(&obsidian_manifest_path)?;
+        let om: ObsidianManifest = serde_json::from_str(&raw)
+            .map_err(|e| AppError::Invalid(format!("invalid manifest.json: {e}")))?;
+        // Obsidian plugins assume broad capabilities; mirror that.
+        PluginManifest {
+            id: om.id,
+            name: om.name,
+            version: om.version,
+            description: om.description.unwrap_or_default(),
+            author: om.author.unwrap_or_default(),
+            entry: "main.js".to_string(),
+            permissions: vec![
+                "commands".into(),
+                "readBlocks".into(),
+                "writeBlocks".into(),
+                "http".into(),
+            ],
+            kind: "obsidian".to_string(),
+        }
+    } else {
         return Err(AppError::Invalid(format!(
-            "missing plugin.json in {}",
+            "missing plugin.json or manifest.json in {}",
             src.display()
         )));
-    }
-    let manifest_raw = fs::read_to_string(&manifest_path)?;
-    let manifest: PluginManifest = serde_json::from_str(&manifest_raw)?;
+    };
     validate_id(&manifest.id)?;
 
     let dest = plugin_root(state)?.join(&manifest.id);

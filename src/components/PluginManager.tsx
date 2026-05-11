@@ -123,7 +123,9 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
           <ul className="plugin-list">
             {list.length === 0 && (
               <li className="plugin-empty">
-                尚未安装插件。请选择包含 <code>plugin.json</code> 的文件夹。
+                尚未安装插件。选择包含 <code>plugin.json</code> 的文件夹（原生插件），
+                或包含 <code>manifest.json</code> + <code>main.js</code> 的 Obsidian 插件文件夹
+                （best-effort 兼容）。
               </li>
             )}
             {list.map((p) => {
@@ -133,6 +135,11 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
                   <div className="plugin-title">
                     <span className="plugin-name">{p.manifest.name}</span>
                     <span className="plugin-version">v{p.manifest.version || "?"}</span>
+                    {p.manifest.kind === "obsidian" && (
+                      <span className="plugin-market-badge update" title="Obsidian 插件兼容模式（best-effort）">
+                        Obsidian
+                      </span>
+                    )}
                   </div>
                   {p.manifest.description && (
                     <p className="plugin-desc">{p.manifest.description}</p>

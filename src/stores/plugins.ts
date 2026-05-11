@@ -5,6 +5,9 @@ import { BUILTIN_MARKETPLACE } from "../plugins/builtinMarketplace";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore － Vite worker URL import.
 import PluginWorker from "../plugins/pluginWorker.ts?worker&inline";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore － Vite worker URL import.
+import ObsidianPluginWorker from "../plugins/obsidianPluginWorker.ts?worker&inline";
 
 export interface PluginManifest {
   id: string;
@@ -14,6 +17,8 @@ export interface PluginManifest {
   author: string;
   entry: string;
   permissions: string[];
+  /** "native" (default) or "obsidian". */
+  kind?: string;
 }
 
 export interface PluginEntry {
@@ -113,7 +118,9 @@ async function startPlugin(entry: PluginEntry): Promise<LivePlugin | null> {
     console.error(`[plugin] failed to load ${entry.manifest.id}`, e);
     return null;
   }
-  const worker = new PluginWorker() as Worker;
+  const worker = (
+    entry.manifest.kind === "obsidian" ? new ObsidianPluginWorker() : new PluginWorker()
+  ) as Worker;
   const live: LivePlugin = { entry, worker, ready: false };
   worker.addEventListener("message", (ev: MessageEvent) =>
     handleWorkerMessage(entry, worker, ev.data),
@@ -306,6 +313,46 @@ async function dispatchRpc(
       } finally {
         clearTimeout(timeout);
       }
+    }
+    case "obsidianWritePage": {
+      // Obsidian vault.write — overwrite the page with the given markdown.
+      needsWrite();
+      const name = String(args[0]);
+      const data = String(args[1] ?? "");
+      const id = name.trim().toLowerCase();
+      let page = await api.getPage(id);
+      if (!page) page = await api.createPage(name);
+      // Replace existing top-level blocks with the supplied content as a
+      // single block. This is destructive — Obsidian's storage model is
+      // file-level, ours is block-level, so we collapse on the way in.
+      for (const blockId of page.root_block_ids) {
+        try {
+          await api.deleteBlock(blockId);
+        } catch {
+          /* ignore individual delete failures */
+        }
+      }
+      await api.insertBlock(page.id, null, null, data);
+      return null;
+    }
+    case "obsidianLoadData": {
+      try {
+        const raw = localStorage.getItem(`logseq-rs:obsidian-data:${Array.from(perms).join(",")}`);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+    case "obsidianSaveData": {
+      try {
+        localStorage.setItem(
+          `logseq-rs:obsidian-data:${Array.from(perms).join(",")}`,
+          JSON.stringify(args[0] ?? null),
+        );
+      } catch {
+        /* quota */
+      }
+      return null;
     }
     default:
       throw new Error(`unknown rpc method: ${method}`);
