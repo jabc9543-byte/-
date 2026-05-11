@@ -429,6 +429,208 @@ class Plugin extends Component {
   }
 }
 
+// ---------- icon registry ----------
+//
+// `addIcon(name, svgBody)` is the documented Obsidian API; `svgBody` is the
+// inner SVG markup (paths/groups) without the outer <svg> wrapper. We keep a
+// registry so `setIcon(el, name)` can later look the icon up. The registry is
+// also consulted when ribbon/status entries are reported to the host so the
+// 全视维 UI can choose to render the SVG instead of a placeholder glyph.
+const iconRegistry = new Map<string, string>();
+
+function wrapIconSvg(body: string): string {
+  // Tolerate both bare inner markup and already-wrapped <svg>...</svg>.
+  if (/^\s*<svg[\s>]/i.test(body)) return body;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="16" height="16">${body}</svg>`;
+}
+
+interface ElementLike {
+  innerHTML?: string;
+  textContent?: string | null;
+  setText?: (t: string) => unknown;
+  empty?: () => unknown;
+}
+
+function writeInto(el: unknown, html: string): boolean {
+  if (!el || typeof el !== "object") return false;
+  const e = el as ElementLike;
+  try {
+    if (typeof e.empty === "function") e.empty();
+  } catch { /* ignore */ }
+  if ("innerHTML" in e) {
+    try {
+      e.innerHTML = html;
+      return true;
+    } catch { /* fall through */ }
+  }
+  if (typeof e.setText === "function") {
+    try {
+      e.setText(html.replace(/<[^>]+>/g, ""));
+      return true;
+    } catch { /* fall through */ }
+  }
+  if ("textContent" in e) {
+    try {
+      e.textContent = html.replace(/<[^>]+>/g, "");
+      return true;
+    } catch { /* ignore */ }
+  }
+  return false;
+}
+
+// ---------- minimal Markdown renderer ----------
+//
+// The sandbox has no DOM, but plugins still call
+// `MarkdownRenderer.renderMarkdown(md, el, sourcePath, component)` against
+// elements they themselves built (e.g. inside a modal). To stay useful we
+// implement a small, regex-based subset that covers the common cases:
+// headings, **bold**, *italic*, `inline code`, fenced ``` blocks, links,
+// bullet/numbered lists, blockquotes, hr, paragraphs, line breaks. This is
+// not CommonMark-compliant; complex documents will render imperfectly.
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    c === "&" ? "&amp;" :
+    c === "<" ? "&lt;" :
+    c === ">" ? "&gt;" :
+    c === '"' ? "&quot;" : "&#39;",
+  );
+}
+
+function renderInline(s: string): string {
+  let out = escapeHtml(s);
+  // inline code first so its contents aren't re-processed
+  const codes: string[] = [];
+  out = out.replace(/`([^`\n]+)`/g, (_m, code) => {
+    codes.push(`<code>${code}</code>`);
+    return `\u0000${codes.length - 1}\u0000`;
+  });
+  // links [text](url) — only http/https/mailto are emitted as <a>
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text: string, href: string) => {
+    if (/^(https?:|mailto:)/i.test(href)) {
+      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    }
+    return `<a>${text}</a>`;
+  });
+  // wiki links [[Page]] → plain link span (no real navigation in worker)
+  out = out.replace(/\[\[([^\]]+)\]\]/g, (_m, name: string) => `<a class="wiki-link">${name}</a>`);
+  // bold then italic
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  // restore code spans
+  out = out.replace(/\u0000(\d+)\u0000/g, (_m, i) => codes[Number(i)] ?? "");
+  return out;
+}
+
+function renderMarkdownToHtml(md: string): string {
+  const src = md.replace(/\r\n?/g, "\n");
+  const lines = src.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  let inList: "ul" | "ol" | null = null;
+  const closeList = () => {
+    if (inList) {
+      out.push(`</${inList}>`);
+      inList = null;
+    }
+  };
+  while (i < lines.length) {
+    const line = lines[i];
+    // fenced code
+    const fence = /^```(\S*)\s*$/.exec(line);
+    if (fence) {
+      closeList();
+      const lang = fence[1];
+      const body: string[] = [];
+      i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        body.push(lines[i]);
+        i++;
+      }
+      i++; // consume closing fence (may be EOF)
+      const cls = lang ? ` class="language-${escapeHtml(lang)}"` : "";
+      out.push(`<pre><code${cls}>${escapeHtml(body.join("\n"))}</code></pre>`);
+      continue;
+    }
+    // heading
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (h) {
+      closeList();
+      const lvl = h[1].length;
+      out.push(`<h${lvl}>${renderInline(h[2])}</h${lvl}>`);
+      i++;
+      continue;
+    }
+    // hr
+    if (/^\s*(\*\s*){3,}\s*$/.test(line) || /^\s*(-\s*){3,}\s*$/.test(line)) {
+      closeList();
+      out.push("<hr/>");
+      i++;
+      continue;
+    }
+    // blockquote
+    if (/^>\s?/.test(line)) {
+      closeList();
+      const buf: string[] = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        buf.push(lines[i].replace(/^>\s?/, ""));
+        i++;
+      }
+      out.push(`<blockquote>${renderInline(buf.join(" "))}</blockquote>`);
+      continue;
+    }
+    // unordered list
+    const ul = /^\s*[-*+]\s+(.*)$/.exec(line);
+    if (ul) {
+      if (inList !== "ul") {
+        closeList();
+        out.push("<ul>");
+        inList = "ul";
+      }
+      out.push(`<li>${renderInline(ul[1])}</li>`);
+      i++;
+      continue;
+    }
+    // ordered list
+    const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+    if (ol) {
+      if (inList !== "ol") {
+        closeList();
+        out.push("<ol>");
+        inList = "ol";
+      }
+      out.push(`<li>${renderInline(ol[1])}</li>`);
+      i++;
+      continue;
+    }
+    // blank line
+    if (/^\s*$/.test(line)) {
+      closeList();
+      i++;
+      continue;
+    }
+    // paragraph: gather adjacent non-blank, non-block lines
+    closeList();
+    const buf: string[] = [line];
+    i++;
+    while (
+      i < lines.length &&
+      !/^\s*$/.test(lines[i]) &&
+      !/^#{1,6}\s+/.test(lines[i]) &&
+      !/^```/.test(lines[i]) &&
+      !/^>\s?/.test(lines[i]) &&
+      !/^\s*[-*+]\s+/.test(lines[i]) &&
+      !/^\s*\d+\.\s+/.test(lines[i])
+    ) {
+      buf.push(lines[i]);
+      i++;
+    }
+    out.push(`<p>${renderInline(buf.join(" "))}</p>`);
+  }
+  closeList();
+  return out.join("\n");
+}
+
 const obsidianModule = {
   Plugin,
   Component,
@@ -513,12 +715,42 @@ const obsidianModule = {
     }
   },
   Platform: { isDesktop: true, isMobile: false, isMobileApp: false },
-  // Stubs for utility helpers some plugins import.
-  addIcon: (_name: string, _svg: string) => {
-    /* no DOM icon registry; recorded silently */
+  // Icon registry. `addIcon` stores the SVG body; `setIcon` looks it up and
+  // writes the wrapped <svg> into el.innerHTML when the target element
+  // supports it (e.g. a host-provided element, or a worker-side fake with
+  // innerHTML).  Unknown icon names emit a placeholder so callers can still
+  // see *something*.
+  addIcon: (name: string, svg: string) => {
+    if (typeof name === "string" && typeof svg === "string") {
+      iconRegistry.set(name, svg);
+    }
   },
-  setIcon: (_el: unknown, _name: string) => {
-    /* no DOM \u2014 plugins that rely on visual feedback are out of luck */
+  setIcon: (el: unknown, name: string) => {
+    const raw = iconRegistry.get(String(name));
+    if (raw !== undefined) {
+      writeInto(el, wrapIconSvg(raw));
+      return;
+    }
+    // unknown icon: emit a placeholder square so the slot is at least visible
+    writeInto(
+      el,
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="16" height="16"><rect x="10" y="10" width="80" height="80" fill="none" stroke="currentColor" stroke-width="8"/></svg>`,
+    );
+  },
+  getIconIds: () => Array.from(iconRegistry.keys()),
+  // MarkdownRenderer — exposes a regex-based renderer that writes HTML into
+  // a caller-provided element. The 4th argument (`component`) is accepted
+  // for API compatibility but ignored.
+  MarkdownRenderer: class {
+    static async renderMarkdown(md: string, el: unknown, _sourcePath?: string, _component?: unknown) {
+      writeInto(el, renderMarkdownToHtml(String(md ?? "")));
+    }
+    static async render(_app: unknown, md: string, el: unknown, _sourcePath?: string, _component?: unknown) {
+      writeInto(el, renderMarkdownToHtml(String(md ?? "")));
+    }
+    static renderMarkdownSync(md: string, el: unknown) {
+      writeInto(el, renderMarkdownToHtml(String(md ?? "")));
+    }
   },
   setTooltip: (_el: unknown, _text: string) => {
     /* no DOM */
