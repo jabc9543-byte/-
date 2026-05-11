@@ -4,6 +4,7 @@ pub mod ai;
 pub mod block;
 pub mod clipper;
 pub mod clip_http;
+pub mod clip_log;
 pub mod clip_token;
 pub mod comments;
 pub mod dashboard;

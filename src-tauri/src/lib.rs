@@ -132,6 +132,8 @@ pub fn run() {
             commands::clipper::receive_clip,
             commands::clip_token::get_clip_token,
             commands::clip_token::rotate_clip_token,
+            commands::clip_log::clip_log,
+            commands::clip_log::clear_clip_log,
             commands::plugin::list_plugins,
             commands::plugin::install_plugin,
             commands::plugin::install_bundled_plugin,

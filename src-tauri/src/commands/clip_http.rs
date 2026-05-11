@@ -27,6 +27,7 @@ use tokio::time::timeout;
 
 use crate::state::AppState;
 use super::clipper::{apply_clip, ClipPayload};
+use super::clip_log;
 use super::clip_token;
 
 const CLIP_HTTP_HOST: &str = "127.0.0.1";
@@ -140,11 +141,13 @@ async fn handle_conn(mut sock: TcpStream, app: AppHandle) -> std::io::Result<()>
 
     if method == "GET" && (path_only == "/" || path_only == "/health") {
         let body = b"{\"ok\":true,\"service\":\"quanshiwei-clipper\"}";
+        clip_log::record(&method, path, 200, None, "health");
         return write_response(&mut sock, 200, "OK", "application/json", body, true, head_str).await;
     }
 
     if method != "POST" || path_only != "/clip" {
         let body = b"{\"error\":\"not found\"}";
+        clip_log::record(&method, path, 404, None, "not found");
         return write_response(&mut sock, 404, "Not Found", "application/json", body, true, head_str).await;
     }
 
@@ -160,6 +163,7 @@ async fn handle_conn(mut sock: TcpStream, app: AppHandle) -> std::io::Result<()>
     let supplied = if !header_token.is_empty() { header_token } else { query_token };
     if expected.is_empty() || !clip_token::eq(supplied, &expected) {
         let body = b"{\"error\":\"missing or invalid X-Clip-Token\"}";
+        clip_log::record(&method, path_only, 401, None, "unauthorized");
         return write_response(&mut sock, 401, "Unauthorized", "application/json", body, true, head_str).await;
     }
 
@@ -168,25 +172,28 @@ async fn handle_conn(mut sock: TcpStream, app: AppHandle) -> std::io::Result<()>
         Ok(p) => p,
         Err(e) => {
             let msg = format!("{{\"error\":\"invalid json: {}\"}}", e);
+            clip_log::record(&method, path_only, 400, None, "invalid json");
             return write_response(&mut sock, 400, "Bad Request", "application/json", msg.as_bytes(), true, head_str).await;
         }
     };
+    let title_for_log = if payload.title.is_empty() { None } else { Some(payload.title.clone()) };
 
     // `app.state::<AppState>()` is cheap (returns a reference held by the
     // app's managed state map). We pass the inner Arc<AppState> by reference
     // through `apply_clip`.
     let state: tauri::State<'_, AppState> = app.state();
     let result = apply_clip(payload, state.inner()).await;
-    let (status, status_text, body_bytes): (u16, &str, Vec<u8>) = match result {
+    let (status, status_text, body_bytes, note): (u16, &str, Vec<u8>, &str) = match result {
         Ok(r) => match serde_json::to_vec(&r) {
-            Ok(v) => (200, "OK", v),
-            Err(e) => (500, "Internal Server Error", format!("{{\"error\":\"serialize: {e}\"}}").into_bytes()),
+            Ok(v) => (200, "OK", v, "ok"),
+            Err(e) => (500, "Internal Server Error", format!("{{\"error\":\"serialize: {e}\"}}").into_bytes(), "serialize error"),
         },
         Err(e) => {
             let body = format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "\\\""));
-            (500, "Internal Server Error", body.into_bytes())
+            (500, "Internal Server Error", body.into_bytes(), "apply_clip error")
         }
     };
+    clip_log::record(&method, path_only, status, title_for_log, note);
 
     write_response(&mut sock, status, status_text, "application/json", &body_bytes, true, head_str).await
 }

@@ -4,6 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { usePluginStore, type MarketplaceEntry } from "../stores/plugins";
 import { BUNDLED_PLUGINS } from "../plugins/bundled";
 
+interface ClipLogEntry {
+  ts: number;
+  method: string;
+  path: string;
+  status: number;
+  title: string | null;
+  note: string;
+}
+
 export function PluginManager({ onClose }: { onClose: () => void }) {
   const list = usePluginStore((s) => s.list);
   const commands = usePluginStore((s) => s.commands);
@@ -391,6 +400,8 @@ function ClipperPanel() {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
   const [rotating, setRotating] = useState(false);
+  const [log, setLog] = useState<ClipLogEntry[]>([]);
+  const [logError, setLogError] = useState<string | null>(null);
   const exampleUrl =
     "quanshiwei://clip?title=Example&url=https%3A%2F%2Fexample.com&body=Hello%20from%20clipper&tags=demo,clip";
   const obsidianTemplate =
@@ -409,6 +420,29 @@ function ClipperPanel() {
       mounted = false;
     };
   }, []);
+
+  const refreshLog = async () => {
+    try {
+      const entries = await invoke<ClipLogEntry[]>("clip_log");
+      setLog(entries.slice().reverse());
+      setLogError(null);
+    } catch (e) {
+      setLogError(String(e));
+    }
+  };
+  useEffect(() => {
+    refreshLog();
+    const t = window.setInterval(refreshLog, 4000);
+    return () => window.clearInterval(t);
+  }, []);
+  const clearLog = async () => {
+    try {
+      await invoke("clear_clip_log");
+      setLog([]);
+    } catch (e) {
+      setLogError(String(e));
+    }
+  };
   const tokenDisplay = token ? (showToken ? token : "•".repeat(Math.min(token.length, 32))) : "(loading…)";
   const tokenForSamples = token || "<paste-token-here>";
   const curlSample =
@@ -566,7 +600,40 @@ function ClipperPanel() {
         请确保最终是逗号分隔的字符串。
       </p>
 
-      <h4>4. 安全说明</h4>
+      <h4>4. 最近请求</h4>
+      <p className="plugin-clipper-hint">
+        仅保存在内存中（应用重启即清空），最多 50 条。展示请求方法、路径、HTTP
+        状态码与（若有）标题，便于诊断 <code>401</code> / <code>400</code> 错误。
+      </p>
+      {logError && (
+        <p className="plugin-clipper-hint" style={{ color: "#c00" }}>
+          读取日志失败：{logError}
+        </p>
+      )}
+      <div className="plugin-clipper-actions">
+        <button onClick={refreshLog}>刷新</button>
+        <button onClick={clearLog} disabled={log.length === 0}>清空</button>
+        <span className="plugin-clipper-hint">共 {log.length} 条</span>
+      </div>
+      {log.length === 0 ? (
+        <p className="plugin-clipper-hint">暂无请求记录。</p>
+      ) : (
+        <pre className="plugin-clipper-code" style={{ maxHeight: 240, overflow: "auto" }}>
+{log
+  .map((e) => {
+    const t = new Date(e.ts).toLocaleTimeString();
+    const status =
+      e.status >= 500 ? `${e.status}!` :
+      e.status >= 400 ? `${e.status}?` :
+      `${e.status} `;
+    const title = e.title ? ` — ${e.title.slice(0, 60)}` : "";
+    return `${t}  ${status}  ${e.method.padEnd(6)} ${e.path.padEnd(20)} ${e.note}${title}`;
+  })
+  .join("\n")}
+        </pre>
+      )}
+
+      <h4>5. 安全说明</h4>
       <ul className="plugin-clipper-notes">
         <li>HTTP 端口仅绑定 <code>127.0.0.1</code>，外部主机无法访问。</li>
         <li><code>POST /clip</code> 必须带匹配的 <code>X-Clip-Token</code>，缺失或错误返回 401。</li>
