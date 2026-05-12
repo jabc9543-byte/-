@@ -36,6 +36,8 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
   const [newUrl, setNewUrl] = useState("");
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [plazaCategory, setPlazaCategory] = useState<string>("全部");
+  const [plazaQuery, setPlazaQuery] = useState("");
 
   useEffect(() => {
     refresh().catch(() => {});
@@ -116,7 +118,7 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
           className={tab === "market" ? "active" : ""}
           onClick={() => setTab("market")}
         >
-          插件市场
+          扩展广场
         </button>
         <button
           className={tab === "clipper" ? "active" : ""}
@@ -203,62 +205,137 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
 
       {tab === "market" && (
         <div className="plugin-marketplace">
-          <div className="plugin-recommended">
-            <h4>✨ 推荐插件（内置，一键安装）</h4>
-            <ul className="plugin-market-list">
-              {BUNDLED_PLUGINS.map(({ manifest, source }) => {
-                const installedVer = installedById.get(manifest.id);
-                const isInstalled = installedVer !== undefined;
-                const hasUpdate = isInstalled && installedVer !== manifest.version;
-                const disabled = busy === manifest.id || (isInstalled && !hasUpdate);
-                return (
-                  <li key={manifest.id} className="plugin-market-item">
-                    <div className="plugin-title">
-                      <span className="plugin-name">{manifest.name}</span>
-                      <span className="plugin-version">v{manifest.version}</span>
-                      {isInstalled && !hasUpdate && (
-                        <span className="plugin-market-badge installed">已安装</span>
-                      )}
-                      {hasUpdate && (
-                        <span className="plugin-market-badge update">
-                          更新（{installedVer} → {manifest.version}）
-                        </span>
-                      )}
-                    </div>
-                    <p className="plugin-desc">{manifest.description}</p>
-                    <div className="plugin-perms">
-                      {manifest.permissions.map((pm) => (
-                        <span key={pm} className="plugin-perm">{pm}</span>
-                      ))}
-                    </div>
-                    <div className="plugin-actions">
+          <div className="plugin-plaza">
+            <div className="plugin-plaza-head">
+              <div>
+                <h4>🛒 扩展广场</h4>
+                <p className="plugin-plaza-sub">
+                  内置原生扩展，一键安装即用 · 仿 Obsidian 插件体系打造
+                </p>
+              </div>
+              <input
+                className="plugin-plaza-search"
+                type="search"
+                placeholder="搜索扩展…"
+                value={plazaQuery}
+                onChange={(e) => setPlazaQuery(e.target.value)}
+              />
+            </div>
+            {(() => {
+              const allCats = Array.from(
+                new Set(BUNDLED_PLUGINS.map((b) => b.manifest.category || "其他")),
+              );
+              const cats = ["全部", ...allCats];
+              const q = plazaQuery.trim().toLowerCase();
+              const filtered = BUNDLED_PLUGINS.filter(({ manifest }) => {
+                const cat = manifest.category || "其他";
+                if (plazaCategory !== "全部" && cat !== plazaCategory) return false;
+                if (!q) return true;
+                return `${manifest.name} ${manifest.description} ${manifest.tagline ?? ""} ${cat}`
+                  .toLowerCase()
+                  .includes(q);
+              });
+              return (
+                <>
+                  <div className="plugin-plaza-chips">
+                    {cats.map((c) => (
                       <button
-                        className="plugin-market-install"
-                        disabled={disabled}
-                        onClick={async () => {
-                          setBusy(manifest.id);
-                          try {
-                            await installBundled(manifest, source);
-                          } catch (e) {
-                            alert(`安装失败：${String(e)}`);
-                          } finally {
-                            setBusy(null);
-                          }
-                        }}
+                        key={c}
+                        className={
+                          "plugin-plaza-chip" +
+                          (plazaCategory === c ? " active" : "")
+                        }
+                        onClick={() => setPlazaCategory(c)}
                       >
-                        {busy === manifest.id
-                          ? "安装中…"
-                          : hasUpdate
-                            ? "更新"
-                            : isInstalled
-                              ? "已安装"
-                              : "安装"}
+                        {c}
                       </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                    ))}
+                  </div>
+                  <div className="plugin-plaza-grid">
+                    {filtered.length === 0 && (
+                      <div className="plugin-empty">没有匹配的扩展。</div>
+                    )}
+                    {filtered.map(({ manifest, source }) => {
+                      const installedVer = installedById.get(manifest.id);
+                      const isInstalled = installedVer !== undefined;
+                      const hasUpdate =
+                        isInstalled && installedVer !== manifest.version;
+                      const disabled =
+                        busy === manifest.id || (isInstalled && !hasUpdate);
+                      return (
+                        <div key={manifest.id} className="plugin-plaza-card">
+                          <div className="plugin-plaza-card-top">
+                            <div className="plugin-plaza-icon">
+                              {manifest.icon ?? "🧩"}
+                            </div>
+                            <div className="plugin-plaza-meta">
+                              <div className="plugin-plaza-title">
+                                {manifest.name}
+                                <span className="plugin-version">
+                                  v{manifest.version}
+                                </span>
+                                {isInstalled && !hasUpdate && (
+                                  <span className="plugin-market-badge installed">
+                                    已安装
+                                  </span>
+                                )}
+                                {hasUpdate && (
+                                  <span className="plugin-market-badge update">
+                                    可更新
+                                  </span>
+                                )}
+                              </div>
+                              {manifest.tagline && (
+                                <div className="plugin-plaza-tagline">
+                                  {manifest.tagline}
+                                </div>
+                              )}
+                              <div className="plugin-plaza-cat">
+                                {manifest.category || "其他"} · {manifest.author}
+                              </div>
+                            </div>
+                          </div>
+                          <p className="plugin-plaza-desc">
+                            {manifest.description}
+                          </p>
+                          <div className="plugin-perms">
+                            {manifest.permissions.map((pm) => (
+                              <span key={pm} className="plugin-perm">
+                                {pm}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="plugin-plaza-actions">
+                            <button
+                              className="plugin-market-install"
+                              disabled={disabled}
+                              onClick={async () => {
+                                setBusy(manifest.id);
+                                try {
+                                  await installBundled(manifest, source);
+                                } catch (e) {
+                                  alert(`安装失败：${String(e)}`);
+                                } finally {
+                                  setBusy(null);
+                                }
+                              }}
+                            >
+                              {busy === manifest.id
+                                ? "安装中…"
+                                : hasUpdate
+                                  ? "更新"
+                                  : isInstalled
+                                    ? "已安装"
+                                    : "安装"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
           </div>
           <div className="plugin-registry-controls">
             <input

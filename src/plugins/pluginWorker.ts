@@ -42,6 +42,15 @@ interface PluginApi {
     insertSibling(afterId: string, content: string): Promise<unknown>;
     search(query: string, limit?: number): Promise<unknown>;
     runQuery(query: string): Promise<unknown>;
+    openTasks(): Promise<unknown>;
+    backlinks(page: string): Promise<unknown>;
+    blocksForDate(ymd: number): Promise<unknown>;
+    listWhiteboards(): Promise<unknown>;
+    createWhiteboard(name: string): Promise<unknown>;
+    openWhiteboard(id: string): Promise<unknown>;
+    openPage(id: string): Promise<unknown>;
+    clipperLog(): Promise<unknown>;
+    clipperToken(): Promise<string>;
     todayJournal(): Promise<unknown>;
     getCurrentPage(): Promise<unknown>;
     httpFetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; headers: Record<string, string>; body: string }>;
@@ -95,6 +104,15 @@ function buildApi(manifest: unknown): PluginApi {
       insertSibling: (afterId, c) => rpc("insertSibling", [afterId, c]),
       search: (q, limit = 30) => rpc("search", [q, limit]),
       runQuery: (q) => rpc("runQuery", [q]),
+      openTasks: () => rpc("openTasks"),
+      backlinks: (page) => rpc("backlinks", [page]),
+      blocksForDate: (ymd) => rpc("blocksForDate", [ymd]),
+      listWhiteboards: () => rpc("listWhiteboards"),
+      createWhiteboard: (name) => rpc("createWhiteboard", [name]),
+      openWhiteboard: (id) => rpc("openWhiteboard", [id]),
+      openPage: (id) => rpc("openPage", [id]),
+      clipperLog: () => rpc("clipperLog"),
+      clipperToken: () => rpc("clipperToken") as Promise<string>,
       todayJournal: () => rpc("todayJournal"),
       getCurrentPage: () => rpc("getCurrentPage"),
       httpFetch: (url, init) =>

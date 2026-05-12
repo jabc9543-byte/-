@@ -19,6 +19,14 @@ export interface PluginManifest {
   permissions: string[];
   /** "native" (default) or "obsidian". */
   kind?: string;
+  /** Category bucket shown in the in-app "插件广场". */
+  category?: string;
+  /** Emoji or short icon glyph shown on cards. */
+  icon?: string;
+  /** Optional homepage / repo URL. */
+  homepage?: string;
+  /** Optional short tagline shown beneath name. */
+  tagline?: string;
 }
 
 export interface PluginEntry {
@@ -260,6 +268,53 @@ async function dispatchRpc(
     case "search":
       needsRead();
       return api.search(String(args[0]), Number(args[1] ?? 30));
+    case "openTasks":
+      needsRead();
+      return api.openTasks();
+    case "backlinks":
+      needsRead();
+      return api.backlinks(String(args[0]));
+    case "blocksForDate":
+      needsRead();
+      return api.blocksForDate(Number(args[0]));
+    case "listWhiteboards":
+      needsRead();
+      return api.listWhiteboards();
+    case "createWhiteboard":
+      needsWrite();
+      return api.createWhiteboard(String(args[0]));
+    case "openWhiteboard": {
+      needsRead();
+      const id = String(args[0]);
+      const { useWhiteboardStore } = await import("./whiteboard");
+      await useWhiteboardStore.getState().open(id);
+      return null;
+    }
+    case "openPage": {
+      needsRead();
+      const id = String(args[0]);
+      const { usePageStore } = await import("./page");
+      await usePageStore.getState().openPage(id);
+      const { useWhiteboardStore } = await import("./whiteboard");
+      useWhiteboardStore.getState().showPage();
+      return null;
+    }
+    case "clipperLog": {
+      needsRead();
+      try {
+        return await invoke("clip_log");
+      } catch {
+        return [];
+      }
+    }
+    case "clipperToken": {
+      needsRead();
+      try {
+        return await invoke("get_clip_token");
+      } catch {
+        return "";
+      }
+    }
     case "updateBlock":
       needsWrite();
       return api.updateBlock(String(args[0]), String(args[1]));
