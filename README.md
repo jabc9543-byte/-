@@ -36,6 +36,27 @@
 - `[[双向链接]]`、`#tag`、`((block-ref))` 解析与反向链接（Backlinks）
 - 全文搜索（LIKE / 内存扫描）
 
+## 🛒 扩展广场 / 原生插件系统
+
+应用内置一个仿 Obsidian 插件体系的「扩展广场」（顶部菜单 → 插件管理 → 扩展广场），所有扩展按分类卡片网格陈列，支持搜索、一键安装、版本检测。当前内置 **5 个原生扩展**，全部使用应用内原生数据 API（沙箱 Worker + 权限模型），无需任何第三方运行时：
+
+| 扩展 | 分类 | 介绍 | 命令 / 斜杠 |
+|---|---|---|---|
+| 📊 **Dataview** | 查询与视图 | 把笔记当成数据库来查询。在块中输入斜杠命令即可把聚合结果作为 Markdown 列表插入当前块 | `/dv-tasks` 未完成任务 · `/dv-today` 今日 journal · `/dv-tag` 按标签 · `/dv-backlinks` 反链 · `/dv-recent` 最近页面 |
+| 🎨 **Excalidraw** | 可视化 | 基于已集成的 tldraw 白板，把白板当作 Excalidraw 草图工具来用 | 命令「Excalidraw：新建快速草图」 · `/draw` 新建并插链 · `/draw-list` 插入白板列表 |
+| 📎 **Web Clipper Pro** | 剪藏 | 与本地 HTTP 剪藏端点（`127.0.0.1` + X-Clip-Token）配合，提供应用内 token 查看、剪藏日志、快速手动剪藏 | 命令「Clipper：查看 X-Clip-Token / 查看最近剪藏 / 快速剪藏到今日」 · `/clip-here` · `/clip-log` |
+| 📅 **Daily Notes 模板** | 生产力 | 一键为今日 journal 注入「任务 / 笔记 / 复盘」结构 | `/template` |
+| ⚡ **Quick Switcher 增强** | 生产力 | 模糊匹配的页面快速跳转 | 命令「快速跳转：页面搜索」 · `/jump` |
+
+**插件体系特性**
+
+- **两种运行时**：原生（`pluginWorker.ts`）+ Obsidian 兼容 shim（`obsidianPluginWorker.ts`），Obsidian 单文件插件大多可直接装入
+- **权限模型**：`commands` / `slashCommands` / `readBlocks` / `writeBlocks` / `http` / `sidebar`
+- **沙箱化**：每个插件运行在独立 Web Worker，所有宿主调用走显式 RPC
+- **宿主 API（节选）**：`listPages` / `getBlock` / `updateBlock` / `insertBlock` / `search` / `runQuery` / `openTasks` / `backlinks` / `blocksForDate` / `listWhiteboards` / `createWhiteboard` / `openWhiteboard` / `openPage` / `httpFetch` / `receiveClip` / `clipperLog` / `clipperToken`
+- **第三方市场**：支持配置任意 HTTPS 资源库 URL（返回插件条目 JSON 即可被发现）
+- **本地安装**：可从任意文件夹直接安装手写插件
+
 ## 规划扩展点（对应 Logseq 的模块）
 
 | Logseq 模块 | 本工程扩展位置 |
