@@ -192,6 +192,14 @@ export function Sidebar() {
           日历
         </button>
         <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("logseq-rs:open-plugins"));
+          }}
+          title="打开扩展广场 / 插件管理器"
+        >
+          扩展广场
+        </button>
+        <button
           className={view.kind === "dashboard" ? "active" : ""}
           onClick={showDashboard}
           title="打开仪表盘"
