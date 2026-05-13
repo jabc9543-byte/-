@@ -42,7 +42,7 @@ logseq.commands.register("excalidraw-list", "Excalidraw\uff1a\u67e5\u770b\u6240\
 logseq.slash.register("/draw", "Excalidraw\uff1a\u65b0\u5efa\u767d\u677f\u5e76\u63d2\u5165\u94fe\u63a5", async ({ blockId }) => {
   try {
     const defName = "\u8349\u56fe " + nowStamp();
-    const name = prompt("\u767d\u677f\u540d\u79f0\uff1a", defName) || defName;
+    const name = await logseq.api.prompt("\u767d\u677f\u540d\u79f0\uff1a", defName) || defName;
     const wb = await createAndOpen(name);
     if (wb && wb.id) {
       const link = "\ud83c\udfa8 \u767d\u677f\uff1a[[" + wb.name + "]]";

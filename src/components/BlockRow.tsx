@@ -7,6 +7,7 @@ import { useCollabStore } from "../stores/collab";
 import { useHistoryPanelStore } from "../stores/history";
 import { useCommentsStore } from "../stores/comments";
 import { useIsTouch } from "../hooks/useMediaQuery";
+import { usePluginStore } from "../stores/plugins";
 import { QueryEmbed } from "./QueryEmbed";
 import { BlockEmbed } from "./BlockEmbed";
 import { TaskMarkerPill } from "./TaskMarkerPill";
@@ -69,6 +70,73 @@ function BlockRowImpl({ block }: Props) {
   // composition and dismisses the soft keyboard. Suspend setValue while
   // composing and reconcile on compositionend.
   const composingRef = useRef(false);
+
+  // --- Slash command suggestion popup ---
+  const slashCommands = usePluginStore((s) => s.slashCommands);
+  const runSlash = usePluginStore((s) => s.runSlash);
+  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const slashMatches = (() => {
+    if (slashQuery === null) return [] as typeof slashCommands;
+    const q = slashQuery.toLowerCase();
+    return slashCommands
+      .filter(
+        (c) =>
+          c.trigger.toLowerCase().includes(q) ||
+          c.label.toLowerCase().includes(q),
+      )
+      .slice(0, 12);
+  })();
+  useEffect(() => {
+    setSlashIndex(0);
+  }, [slashQuery, slashMatches.length]);
+  const detectSlash = (text: string, caret: number) => {
+    // Look back from caret for the last '/' on this line; if found and
+    // the substring between '/' and caret contains no whitespace, show
+    // the suggestion list filtered by that substring.
+    let i = caret - 1;
+    while (i >= 0) {
+      const ch = text[i];
+      if (ch === "\n") {
+        setSlashQuery(null);
+        return;
+      }
+      if (ch === "/") {
+        const seg = text.slice(i + 1, caret);
+        if (/^\S*$/.test(seg)) {
+          setSlashQuery(seg);
+          return;
+        }
+        setSlashQuery(null);
+        return;
+      }
+      if (/\s/.test(ch)) {
+        setSlashQuery(null);
+        return;
+      }
+      i -= 1;
+    }
+    setSlashQuery(null);
+  };
+  const pickSlash = async (idx: number) => {
+    const hit = slashMatches[idx];
+    if (!hit) return;
+    const el = ref.current;
+    if (!el) return;
+    const caret = el.selectionStart ?? el.value.length;
+    // strip the "/xxx" preceding caret
+    const text = el.value;
+    let i = caret - 1;
+    while (i >= 0 && text[i] !== "/" && text[i] !== "\n" && !/\s/.test(text[i])) i -= 1;
+    if (text[i] !== "/") { setSlashQuery(null); return; }
+    const next = text.slice(0, i) + text.slice(caret);
+    setSlashQuery(null);
+    setValue(next);
+    el.value = next;
+    el.setSelectionRange(i, i);
+    if (next !== block.content) await update(block.id, next);
+    runSlash(hit.pluginId, hit.trigger, block.id);
+  };
 
   // --- Collaborative editing binding ---
   const collabStatus = useCollabStore((s) => s.status);
@@ -276,6 +344,29 @@ function BlockRowImpl({ block }: Props) {
   };
 
   const onKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Slash menu navigation has highest priority.
+    if (slashQuery !== null && slashMatches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashIndex((i) => (i + 1) % slashMatches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashIndex((i) => (i - 1 + slashMatches.length) % slashMatches.length);
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await pickSlash(slashIndex);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSlashQuery(null);
+        return;
+      }
+    }
     const current = getCurrentValue();
     if (isTouch) {
       logMobileDebug("keydown", e.key, {
@@ -470,6 +561,7 @@ function BlockRowImpl({ block }: Props) {
                   });
                 }
                 setValue(next);
+                detectSlash(next, e.target.selectionStart ?? next.length);
                 if (collabActive) syncToY(next);
               }}
               onBlur={() => {
@@ -484,6 +576,7 @@ function BlockRowImpl({ block }: Props) {
                 }
                 setFocused(false);
                 focusedRef.current = false;
+                setSlashQuery(null);
                 autoresizeOnBlur();
                 // Defer mobile-editor unregister to the next tick so a tap on
                 // the floating toolbar doesn't tear it down before the click
@@ -569,6 +662,23 @@ function BlockRowImpl({ block }: Props) {
                 }}
               >
                 <InlineRefs content={previewText} />
+              </div>
+            )}
+            {focused && slashQuery !== null && slashMatches.length > 0 && (
+              <div className="slash-suggest">
+                {slashMatches.map((m, i) => (
+                  <div
+                    key={`${m.pluginId}:${m.trigger}`}
+                    className={`slash-suggest-item${i === slashIndex ? " active" : ""}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      void pickSlash(i);
+                    }}
+                  >
+                    <span className="slash-suggest-trigger">{m.trigger}</span>
+                    <span className="slash-suggest-label">{m.label}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

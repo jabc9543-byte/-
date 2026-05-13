@@ -1,9 +1,9 @@
-{
+﻿{
   "name": "logseq-rs",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
-  "description": "全视维 — 使用 Rust + Tauri + React + TypeScript 重构的本地优先知识图谱应用。",
+  "description": "鍏ㄨ缁?鈥?浣跨敤 Rust + Tauri + React + TypeScript 閲嶆瀯鐨勬湰鍦颁紭鍏堢煡璇嗗浘璋卞簲鐢ㄣ€?,
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

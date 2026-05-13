@@ -93,11 +93,26 @@ interface LivePlugin {
   ready: boolean;
 }
 
+export interface PluginPromptRequest {
+  id: number;
+  pluginId: string;
+  message: string;
+  default: string;
+}
+
+export interface PluginAlertRequest {
+  id: number;
+  pluginId: string;
+  message: string;
+}
+
 interface PluginState {
   list: PluginEntry[];
   commands: PluginCommand[];
   slashCommands: PluginSlashCommand[];
   notifications: { id: number; pluginId: string; message: string }[];
+  promptRequest: PluginPromptRequest | null;
+  alertRequest: PluginAlertRequest | null;
   registries: string[];
   listings: MarketplaceListing[];
   marketLoading: boolean;
@@ -110,12 +125,18 @@ interface PluginState {
   runSlash: (pluginId: string, trigger: string, blockId: string) => void;
   dispatchEvent: (name: string, payload: unknown) => void;
   dismissNotification: (id: number) => void;
+  resolvePrompt: (id: number, value: string | null) => void;
+  resolveAlert: (id: number) => void;
   addRegistry: (url: string) => Promise<void>;
   removeRegistry: (url: string) => void;
   refreshMarketplace: () => Promise<void>;
   installFromMarketplace: (entry: MarketplaceEntry) => Promise<void>;
   installBundled: (manifest: PluginManifest, source: string) => Promise<void>;
 }
+
+let promptSeq = 0;
+const promptWaiters = new Map<number, (v: string | null) => void>();
+const alertWaiters = new Map<number, () => void>();
 
 const live = new Map<string, LivePlugin>();
 
@@ -410,6 +431,27 @@ async function dispatchRpc(
       }
       return null;
     }
+    case "prompt": {
+      const message = String(args[0] ?? "");
+      const def = String(args[1] ?? "");
+      return new Promise<string | null>((resolve) => {
+        const id = ++promptSeq;
+        promptWaiters.set(id, resolve);
+        usePluginStore.setState({
+          promptRequest: { id, pluginId: "plugin", message, default: def },
+        });
+      });
+    }
+    case "alert": {
+      const message = String(args[0] ?? "");
+      return new Promise<void>((resolve) => {
+        const id = ++promptSeq;
+        alertWaiters.set(id, resolve);
+        usePluginStore.setState({
+          alertRequest: { id, pluginId: "plugin", message },
+        });
+      });
+    }
     default:
       throw new Error(`unknown rpc method: ${method}`);
   }
@@ -420,6 +462,8 @@ export const usePluginStore = create<PluginState>((set, get) => ({
   commands: [],
   slashCommands: [],
   notifications: [],
+  promptRequest: null,
+  alertRequest: null,
   registries: loadRegistries(),
   listings: [BUILTIN_MARKETPLACE],
   marketLoading: false,
@@ -477,6 +521,24 @@ export const usePluginStore = create<PluginState>((set, get) => ({
 
   dismissNotification: (id) => {
     set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) }));
+  },
+
+  resolvePrompt: (id, value) => {
+    const w = promptWaiters.get(id);
+    if (w) {
+      promptWaiters.delete(id);
+      w(value);
+    }
+    set({ promptRequest: null });
+  },
+
+  resolveAlert: (id) => {
+    const w = alertWaiters.get(id);
+    if (w) {
+      alertWaiters.delete(id);
+      w();
+    }
+    set({ alertRequest: null });
   },
 
   addRegistry: async (url) => {

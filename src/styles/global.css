@@ -5133,3 +5133,51 @@ input, textarea { font-family: inherit; color: inherit; }
   line-height: 1;
   cursor: pointer;
 }
+/* === Plugin Prompt / Alert modal === */
+.plugin-prompt-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999;
+}
+.plugin-prompt-modal {
+  background: var(--bg-elevated, #fff);
+  color: var(--text-primary, #222);
+  border-radius: 10px;
+  width: 480px; max-width: 90vw;
+  padding: 20px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.25);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.plugin-prompt-title { font-weight: 600; font-size: 14px; }
+.plugin-prompt-message { font-size: 13px; opacity: 0.85; white-space: pre-wrap; }
+.plugin-prompt-input {
+  width: 100%; box-sizing: border-box; padding: 8px; font-size: 13px;
+  border: 1px solid var(--border, #ccc); border-radius: 6px; resize: vertical;
+  background: var(--bg-input, #fff); color: inherit; font-family: inherit;
+}
+.plugin-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.plugin-prompt-btn {
+  padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border, #ccc);
+  background: transparent; cursor: pointer; font-size: 13px;
+}
+.plugin-prompt-btn.primary { background: var(--accent, #2d7df6); color: #fff; border-color: transparent; }
+
+/* === Slash command suggestion popup === */
+.slash-suggest {
+  position: absolute; left: 0; top: 100%;
+  background: var(--bg-elevated, #fff);
+  color: var(--text-primary, #222);
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+  z-index: 999;
+  max-height: 280px; overflow: auto;
+  min-width: 280px;
+}
+.slash-suggest-item {
+  padding: 6px 10px; cursor: pointer; font-size: 12.5px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.slash-suggest-item.active { background: var(--accent, #2d7df6); color: #fff; }
+.slash-suggest-trigger { font-family: ui-monospace, monospace; font-weight: 600; }
+.slash-suggest-label { opacity: 0.8; font-size: 11.5px; }

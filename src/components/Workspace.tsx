@@ -12,6 +12,7 @@ import { Dashboard } from "./Dashboard";
 import { SearchPanel } from "./SearchPanel";
 import { AgendaView } from "./AgendaView";
 import { PluginManager, PluginNotifications } from "./PluginManager";
+import { PluginPrompt } from "./PluginPrompt";
 import { SettingsModal, CollabPresence } from "./SettingsModal";
 import { UpdateBanner } from "./UpdateBanner";
 import { BlockHistoryPanel } from "./BlockHistoryPanel";
@@ -544,6 +545,7 @@ export function Workspace() {
         </div>
       )}
       <PluginNotifications />
+      <PluginPrompt />
       <UpdateBanner />
       <BlockHistoryPanel />
       <CommentsPanel />

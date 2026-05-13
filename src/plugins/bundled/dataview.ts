@@ -88,7 +88,7 @@ logseq.slash.register("/dv-backlinks", "Dataview\uff1a\u63d2\u5165\u5f53\u524d\u
 
 logseq.slash.register("/dv-tag", "Dataview\uff1a\u6309\u6807\u7b7e\u67e5\u8be2", async ({ blockId }) => {
   try {
-    const raw = prompt("\u8f93\u5165\u6807\u7b7e\uff08\u53ef\u5305\u542b #\uff0c\u4f8b\u5982 #\u9879\u76ee\uff09\uff1a", "");
+    const raw = await logseq.api.prompt("\u8f93\u5165\u6807\u7b7e\uff08\u53ef\u5305\u542b #\uff0c\u4f8b\u5982 #\u9879\u76ee\uff09\uff1a", "");
     if (!raw) return;
     const tag = raw.trim().replace(/^#/, "");
     if (!tag) return;

@@ -56,6 +56,8 @@ interface PluginApi {
     httpFetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; headers: Record<string, string>; body: string }>;
     receiveClip(payload: { title: string; url: string; body: string; tags?: string[]; mode?: "page" | "journal" }): Promise<unknown>;
     notify(message: string): void;
+    prompt(message: string, defaultValue?: string): Promise<string | null>;
+    alert(message: string): Promise<void>;
   };
 }
 
@@ -125,6 +127,9 @@ function buildApi(manifest: unknown): PluginApi {
       notify: (message) => {
         self.postMessage({ __rs_notify: true, message });
       },
+      prompt: (message, defaultValue = "") =>
+        rpc("prompt", [message, defaultValue]) as Promise<string | null>,
+      alert: (message) => rpc("alert", [message]) as Promise<void>,
     },
   };
 }

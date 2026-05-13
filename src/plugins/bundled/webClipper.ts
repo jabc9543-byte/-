@@ -27,7 +27,7 @@ logseq.commands.register("clipper-token", "Clipper\uff1a\u67e5\u770b X-Clip-Toke
       logseq.api.notify("\u672a\u83b7\u53d6\u5230 token");
       return;
     }
-    prompt("\u5f53\u524d X-Clip-Token\uff08\u9700\u8981\u5728\u6d4f\u89c8\u5668\u6269\u5c55\u4e2d\u586b\u5165\uff09\uff1a", t);
+    await logseq.api.prompt("\u5f53\u524d X-Clip-Token\uff08\u9700\u8981\u5728\u6d4f\u89c8\u5668\u6269\u5c55\u4e2d\u586b\u5165\uff09\uff1a", t);
   } catch (e) {
     logseq.api.notify("\u83b7\u53d6 token \u5931\u8d25\uff1a" + (e && e.message ? e.message : e));
   }
@@ -44,7 +44,7 @@ logseq.commands.register("clipper-log", "Clipper\uff1a\u67e5\u770b\u6700\u8fd1\u
       .slice(-15)
       .reverse()
       .map((e) => fmtTime(e.ts) + "  " + e.status + "  " + (e.title || "(\u65e0\u6807\u9898)"));
-    alert("\u6700\u8fd1\u526a\u85cf\u8bb0\u5f55\uff1a\n\n" + lines.join("\n"));
+    await logseq.api.alert("\u6700\u8fd1\u526a\u85cf\u8bb0\u5f55\uff1a\n\n" + lines.join("\n"));
   } catch (e) {
     logseq.api.notify("\u8bfb\u53d6\u5931\u8d25\uff1a" + (e && e.message ? e.message : e));
   }
@@ -52,13 +52,13 @@ logseq.commands.register("clipper-log", "Clipper\uff1a\u67e5\u770b\u6700\u8fd1\u
 
 logseq.commands.register("clipper-quick", "Clipper\uff1a\u5feb\u901f\u526a\u85cf\u5230\u4eca\u65e5", async () => {
   try {
-    const title = prompt("\u6587\u7ae0\u6807\u9898\uff08\u53ef\u7559\u7a7a\u4e3a journal \u6a21\u5f0f\uff09\uff1a", "");
+    const title = await logseq.api.prompt("\u6587\u7ae0\u6807\u9898\uff08\u53ef\u7559\u7a7a\u4e3a journal \u6a21\u5f0f\uff09\uff1a", "");
     if (title === null) return;
-    const url = prompt("\u6765\u6e90 URL\uff1a", "");
+    const url = await logseq.api.prompt("\u6765\u6e90 URL\uff1a", "");
     if (url === null) return;
-    const body = prompt("\u6b63\u6587 Markdown\uff1a", "");
+    const body = await logseq.api.prompt("\u6b63\u6587 Markdown\uff1a", "");
     if (body === null) return;
-    const tagsRaw = prompt("\u6807\u7b7e\uff08\u9017\u53f7\u5206\u9694\uff0c\u53ef\u7559\u7a7a\uff09\uff1a", "");
+    const tagsRaw = await logseq.api.prompt("\u6807\u7b7e\uff08\u9017\u53f7\u5206\u9694\uff0c\u53ef\u7559\u7a7a\uff09\uff1a", "");
     const tags = (tagsRaw || "")
       .split(",")
       .map((s) => s.trim())
@@ -73,11 +73,11 @@ logseq.commands.register("clipper-quick", "Clipper\uff1a\u5feb\u901f\u526a\u85cf
 
 logseq.slash.register("/clip-here", "Clipper\uff1a\u62fc\u63a5\u5757\u4e3a\u4e00\u6761\u526a\u85cf", async ({ blockId }) => {
   try {
-    const title = prompt("\u6807\u9898\uff1a", "");
+    const title = await logseq.api.prompt("\u6807\u9898\uff1a", "");
     if (title === null) return;
-    const url = prompt("URL\uff1a", "");
+    const url = await logseq.api.prompt("URL\uff1a", "");
     if (url === null) return;
-    const body = prompt("\u6b63\u6587 Markdown\uff1a", "");
+    const body = await logseq.api.prompt("\u6b63\u6587 Markdown\uff1a", "");
     if (body === null) return;
     const r = await doClip({ title: title.trim(), url: url.trim(), body, tags: [], mode: title.trim() ? "page" : "journal" });
     const link = "\ud83d\udcce \u526a\u85cf\uff1a" + (r && r.page_name ? "[[" + r.page_name + "]]" : title || url);
