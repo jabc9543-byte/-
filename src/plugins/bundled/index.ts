@@ -4,6 +4,7 @@ import { QUICK_SWITCHER_MAIN_JS } from "./quickSwitcher";
 import { DATAVIEW_MAIN_JS } from "./dataview";
 import { EXCALIDRAW_MAIN_JS } from "./excalidraw";
 import { WEB_CLIPPER_MAIN_JS } from "./webClipper";
+import { OBSIDIAN_PACK } from "./obsidianPack";
 
 export interface BundledPlugin {
   manifest: PluginManifest;
@@ -96,4 +97,5 @@ export const BUNDLED_PLUGINS: BundledPlugin[] = [
     },
     source: QUICK_SWITCHER_MAIN_JS,
   },
+  ...OBSIDIAN_PACK,
 ];
