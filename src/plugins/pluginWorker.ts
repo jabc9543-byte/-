@@ -37,12 +37,16 @@ interface PluginApi {
     listPages(): Promise<unknown>;
     getPage(id: string): Promise<unknown>;
     getBlock(id: string): Promise<unknown>;
+    pageBlocks(id: string): Promise<unknown>;
     updateBlock(id: string, content: string): Promise<unknown>;
     insertBlock(page: string, parent: string | null, after: string | null, content: string): Promise<unknown>;
     insertSibling(afterId: string, content: string): Promise<unknown>;
     search(query: string, limit?: number): Promise<unknown>;
     runQuery(query: string): Promise<unknown>;
     openTasks(): Promise<unknown>;
+    agenda(completedDays?: number): Promise<unknown>;
+    cycleTask(id: string): Promise<unknown>;
+    setTask(id: string, marker: string | null): Promise<unknown>;
     backlinks(page: string): Promise<unknown>;
     blocksForDate(ymd: number): Promise<unknown>;
     listWhiteboards(): Promise<unknown>;
@@ -53,6 +57,7 @@ interface PluginApi {
     clipperToken(): Promise<string>;
     todayJournal(): Promise<unknown>;
     getCurrentPage(): Promise<unknown>;
+    setTheme(name: string): Promise<string>;
     httpFetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; headers: Record<string, string>; body: string }>;
     receiveClip(payload: { title: string; url: string; body: string; tags?: string[]; mode?: "page" | "journal" }): Promise<unknown>;
     notify(message: string): void;
@@ -101,12 +106,16 @@ function buildApi(manifest: unknown): PluginApi {
       listPages: () => rpc("listPages"),
       getPage: (id) => rpc("getPage", [id]),
       getBlock: (id) => rpc("getBlock", [id]),
+      pageBlocks: (id) => rpc("pageBlocks", [id]),
       updateBlock: (id, c) => rpc("updateBlock", [id, c]),
       insertBlock: (p, parent, after, c) => rpc("insertBlock", [p, parent, after, c]),
       insertSibling: (afterId, c) => rpc("insertSibling", [afterId, c]),
       search: (q, limit = 30) => rpc("search", [q, limit]),
       runQuery: (q) => rpc("runQuery", [q]),
       openTasks: () => rpc("openTasks"),
+      agenda: (days = 7) => rpc("agenda", [days]),
+      cycleTask: (id) => rpc("cycleTask", [id]),
+      setTask: (id, marker) => rpc("setTask", [id, marker]),
       backlinks: (page) => rpc("backlinks", [page]),
       blocksForDate: (ymd) => rpc("blocksForDate", [ymd]),
       listWhiteboards: () => rpc("listWhiteboards"),
@@ -117,6 +126,7 @@ function buildApi(manifest: unknown): PluginApi {
       clipperToken: () => rpc("clipperToken") as Promise<string>,
       todayJournal: () => rpc("todayJournal"),
       getCurrentPage: () => rpc("getCurrentPage"),
+      setTheme: (name) => rpc("setTheme", [name]) as Promise<string>,
       httpFetch: (url, init) =>
         rpc("httpFetch", [url, init ?? {}]) as Promise<{
           status: number;

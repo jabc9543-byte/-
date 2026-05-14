@@ -677,6 +677,80 @@ function ClipperPanel() {
         请确保最终是逗号分隔的字符串。
       </p>
 
+      <h4>3.1 详细操作步骤（完全对齐 Obsidian Web Clipper）</h4>
+      <ol className="plugin-clipper-steps">
+        <li>
+          <strong>安装扩展</strong>：
+          <ul>
+            <li>Chrome / Edge：在 Chrome Web Store 搜索 <em>Obsidian Web Clipper</em> 安装。</li>
+            <li>Firefox：在 Add-ons 应用市场搜索同名扩展安装。</li>
+            <li>Safari：从 App Store 安装 Obsidian Web Clipper Safari Extension。</li>
+          </ul>
+        </li>
+        <li>
+          <strong>连接本应用</strong>：在浏览器扩展 <em>Settings · General</em> 中：
+          <ul>
+            <li>把 <em>Vault</em> 选项切换到 <em>Custom URL</em> 或 <em>Webhook</em>。</li>
+            <li>URL 填入：<code>{httpEndpoint}</code></li>
+            <li>添加 Header：<code>X-Clip-Token</code> = 上方"复制"按钮取到的 token。</li>
+            <li>Method 选 <code>POST</code>，Body 选 <code>JSON</code>。</li>
+          </ul>
+        </li>
+        <li>
+          <strong>创建模板</strong>：在扩展 <em>Settings · Templates</em> 新建：
+          <ul>
+            <li>Name：例如"剪藏到全视维"。</li>
+            <li>Trigger：根据网页规则（可留空使用默认）。</li>
+            <li>Behavior：<em>Custom URL</em> 或 <em>Webhook</em>。</li>
+            <li>Output：勾选 <em>Include frontmatter</em>，按需勾选 <em>Selection only</em>、<em>Convert images to base64</em>。</li>
+          </ul>
+        </li>
+        <li>
+          <strong>模板变量对照表</strong>（粘贴到 URL 或 Body 模板）：
+          <pre className="plugin-clipper-code">
+{`{{title}}              页面标题
+{{url}}                源 URL
+{{content}}            完整 Markdown 正文
+{{selectionMarkdown}}  仅当前选区
+{{tags}}               以逗号分隔的标签
+{{date}}               当前日期 YYYY-MM-DD
+{{readingTime}}        预计阅读时间
+{{author}} {{site}}    站点元数据`}
+          </pre>
+        </li>
+        <li>
+          <strong>Behavior 三种模式</strong>：
+          <ul>
+            <li><em>Open in browser</em>：扩展打开 <code>quanshiwei://clip?...</code>，由 OS 唤起应用。</li>
+            <li><em>Custom URL (POST)</em>：扩展直接 POST 到 <code>{httpEndpoint}</code>，最稳。</li>
+            <li><em>Copy to clipboard</em>：仅复制 Markdown，由你手动粘贴到本应用。</li>
+          </ul>
+        </li>
+        <li>
+          <strong>截取范围</strong>：
+          <ul>
+            <li><em>Full page</em>：默认，整页 Markdown。</li>
+            <li><em>Selection only</em>：仅当前选区。</li>
+            <li><em>Reader view</em>：先进入阅读视图再剪藏，去除广告/侧栏。</li>
+            <li><em>Highlight only</em>：搭配 <code>{`{{selectionMarkdown}}`}</code> 仅传高亮。</li>
+          </ul>
+        </li>
+        <li>
+          <strong>测试剪藏</strong>：在任意网页打开扩展弹窗，选择模板，点击 <em>Clip</em>。
+          应用端会出现一条「剪藏完成」通知；本面板「最近请求」会即时刷新。
+        </li>
+        <li>
+          <strong>故障排查</strong>：
+          <ul>
+            <li><code>401</code>：X-Clip-Token 未填或不匹配。点击上方"重新生成"后同步到扩展。</li>
+            <li><code>400</code>：请求体不是合法 JSON。检查扩展 Body 选项与 Content-Type。</li>
+            <li><code>未返回 page_name</code>：是 journal 模式，已追加到今日 journal。</li>
+            <li>页面无变化：本面板「最近请求」也未出现 → 检查扩展 URL/Header；
+              再试 <code>GET http://127.0.0.1:33333/health</code>。</li>
+          </ul>
+        </li>
+      </ol>
+
       <h4>4. 最近请求</h4>
       <p className="plugin-clipper-hint">
         仅保存在内存中（应用重启即清空），最多 50 条。展示请求方法、路径、HTTP

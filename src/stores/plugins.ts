@@ -138,6 +138,26 @@ let promptSeq = 0;
 const promptWaiters = new Map<number, (v: string | null) => void>();
 const alertWaiters = new Map<number, () => void>();
 
+// Fired after any plugin-initiated mutation (insertBlock / updateBlock /
+// receiveClip). Views that show derived data (Agenda, Calendar, current
+// page) can listen and refresh.
+function emitDataChanged() {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new CustomEvent("quanshiwei:data-changed"));
+  } catch {
+    /* ignore */
+  }
+  // Also reload the currently-open page so tasks inserted by plugins
+  // show up in the editor immediately.
+  import("./page")
+    .then(({ usePageStore }) => {
+      const id = usePageStore.getState().activePageId;
+      if (id) usePageStore.getState().openPage(id).catch(() => {});
+    })
+    .catch(() => {});
+}
+
 const live = new Map<string, LivePlugin>();
 
 async function startPlugin(entry: PluginEntry): Promise<LivePlugin | null> {
@@ -273,6 +293,65 @@ async function dispatchRpc(
     case "getBlock":
       needsRead();
       return api.getBlock(String(args[0]));
+    case "pageBlocks": {
+      // Return ALL blocks (recursively) for a page in document order.
+      needsRead();
+      const pid = String(args[0]);
+      const page = await api.getPage(pid);
+      if (!page) return [];
+      const out: unknown[] = [];
+      const visit = async (ids: string[]) => {
+        for (const id of ids) {
+          const b = await api.getBlock(id);
+          if (!b) continue;
+          out.push(b);
+          if (b.children && b.children.length) await visit(b.children);
+        }
+      };
+      await visit(page.root_block_ids);
+      return out;
+    }
+    case "agenda":
+      needsRead();
+      return api.agenda(Number(args[0] ?? 7));
+    case "cycleTask": {
+      needsWrite();
+      const r = await api.cycleTask(String(args[0]));
+      emitDataChanged();
+      return r;
+    }
+    case "setTask": {
+      needsWrite();
+      const r = await api.setTask(
+        String(args[0]),
+        (args[1] as import("../types").TaskMarker | null) ?? null,
+      );
+      emitDataChanged();
+      return r;
+    }
+    case "setTheme": {
+      // No permission required — purely cosmetic.
+      const name = String(args[0] ?? "system");
+      const { useSettingsStore } = await import("./settings");
+      if (name === "system" || name === "light" || name === "dark") {
+        useSettingsStore.getState().setTheme(name);
+        try {
+          localStorage.removeItem("quanshiwei:extra-theme");
+        } catch {
+          /* ignore */
+        }
+      } else {
+        // Extended theme set as a raw data-theme attribute. Persist
+        // through localStorage so it survives reload.
+        document.documentElement.setAttribute("data-theme", name);
+        try {
+          localStorage.setItem("quanshiwei:extra-theme", name);
+        } catch {
+          /* ignore */
+        }
+      }
+      return name;
+    }
     case "getCurrentPage": {
       needsRead();
       const { usePageStore } = await import("./page");
@@ -336,29 +415,39 @@ async function dispatchRpc(
         return "";
       }
     }
-    case "updateBlock":
+    case "updateBlock": {
       needsWrite();
-      return api.updateBlock(String(args[0]), String(args[1]));
-    case "insertBlock":
+      const r = await api.updateBlock(String(args[0]), String(args[1]));
+      emitDataChanged();
+      return r;
+    }
+    case "insertBlock": {
       needsWrite();
-      return api.insertBlock(
+      const r = await api.insertBlock(
         String(args[0]),
         (args[1] as string | null) ?? null,
         (args[2] as string | null) ?? null,
         String(args[3]),
       );
+      emitDataChanged();
+      return r;
+    }
     case "insertSibling": {
       needsWrite();
       const afterId = String(args[0]);
       const content = String(args[1]);
       const after = await api.getBlock(afterId);
       if (!after) throw new Error(`block not found: ${afterId}`);
-      return api.insertBlock(after.page_id, after.parent_id, afterId, content);
+      const r = await api.insertBlock(after.page_id, after.parent_id, afterId, content);
+      emitDataChanged();
+      return r;
     }
     case "receiveClip": {
       needsWrite();
       const payload = (args[0] ?? {}) as Record<string, unknown>;
-      return invoke("receive_clip", { payload });
+      const r = await invoke("receive_clip", { payload });
+      emitDataChanged();
+      return r;
     }
     case "httpFetch": {
       needsNet();

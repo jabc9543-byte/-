@@ -109,6 +109,17 @@ export function AgendaView() {
     refresh();
   }, [refresh]);
 
+  // Re-fetch whenever a plugin (or the editor) reports that data changed
+  // so newly inserted TODO blocks show up without needing the manual
+  // "刷新" button.
+  useEffect(() => {
+    const handler = () => {
+      refresh().catch(() => {});
+    };
+    window.addEventListener("quanshiwei:data-changed", handler);
+    return () => window.removeEventListener("quanshiwei:data-changed", handler);
+  }, [refresh]);
+
   const grouped = useMemo(() => {
     const map: Record<Bucket, AgendaItem[]> = {
       overdue: [],

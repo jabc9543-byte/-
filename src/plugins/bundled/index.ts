@@ -4,6 +4,7 @@ import { QUICK_SWITCHER_MAIN_JS } from "./quickSwitcher";
 import { DATAVIEW_MAIN_JS } from "./dataview";
 import { EXCALIDRAW_MAIN_JS } from "./excalidraw";
 import { WEB_CLIPPER_MAIN_JS } from "./webClipper";
+import { THEMES_MAIN_JS } from "./themes";
 import { OBSIDIAN_PACK } from "./obsidianPack";
 
 export interface BundledPlugin {
@@ -18,7 +19,7 @@ export const BUNDLED_PLUGINS: BundledPlugin[] = [
       name: "Dataview",
       version: "0.1.0",
       description:
-        "在块中输入斜杠命令可将查询结果插入当前块。斜杠：/dv-tasks、/dv-today、/dv-backlinks、/dv-tag、/dv-recent。命令：Dataview：弹窗查看未完成任务。",
+        "在块中输入斜杠命令可将查询结果插入当前块。斜杠：/dv-tasks（未完成任务）、/dv-agenda（日程）、/dv-today、/dv-backlinks、/dv-tag、/dv-recent、/todo（把当前块变成 TODO 任务）。命令：Dataview：弹窗查看未完成任务。",
       author: "全视维 官方",
       entry: "main.js",
       permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks"],
@@ -52,7 +53,7 @@ export const BUNDLED_PLUGINS: BundledPlugin[] = [
       name: "Web Clipper Pro",
       version: "0.1.0",
       description:
-        "查看 token、查看最近剪藏日志、手动剪藏 Markdown。斜杠：/clip-here、/clip-log。命令：Clipper：查看 X-Clip-Token；Clipper：查看最近剪藏记录；Clipper：快速剪藏到今日。",
+        "完全仿照 Obsidian Web Clipper：本地 HTTP 接收端 + token + 模板。斜杠：/clip-here、/clip-log、/clip-template。命令：Clipper：查看 token / 查看接收端点 / 查看记录 / 快速剪藏 / 剪藏选区高亮 / 详细使用步骤。",
       author: "全视维 官方",
       entry: "main.js",
       permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks"],
@@ -96,6 +97,23 @@ export const BUNDLED_PLUGINS: BundledPlugin[] = [
       tagline: "用模糊匹配快速跳到任何页面",
     },
     source: QUICK_SWITCHER_MAIN_JS,
+  },
+  {
+    manifest: {
+      id: "com.logseqrs.themes",
+      name: "主题包",
+      version: "0.1.0",
+      description:
+        "一键切换 10 套主题：跟随系统 / 浅色 / 深色 / Solarized Light / Solarized Dark / Nord / Paper / Forest / Midnight / Rose。命令：主题：跟随系统、主题：浅色 等。",
+      author: "全视维 官方",
+      entry: "main.js",
+      permissions: ["commands"],
+      kind: "native",
+      category: "外观",
+      icon: "🎨",
+      tagline: "一键切换主题，立即生效",
+    },
+    source: THEMES_MAIN_JS,
   },
   ...OBSIDIAN_PACK,
 ];

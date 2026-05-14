@@ -32,10 +32,25 @@ async function appendCurrent(text) {
   return p.id;
 }
 async function journalBlocks() {
+  // Prefer the currently-open journal page's blocks; fall back to today's
+  // journal; finally fall back to recursively walking the active page so
+  // the plugin still works on a non-journal page.
   let p = await logseq.api.getCurrentPage();
-  if (!p || !p.journal_day) p = await _today();
-  if (!p || !p.journal_day) return [];
-  return await logseq.api.blocksForDate(p.journal_day) || [];
+  if (p && p.journal_day) {
+    const bs = await logseq.api.blocksForDate(p.journal_day);
+    if (bs && bs.length) return bs;
+  }
+  const today = await _today();
+  if (today && today.journal_day) {
+    const bs = await logseq.api.blocksForDate(today.journal_day);
+    if (bs && bs.length) return bs;
+  }
+  const cur = p || today;
+  if (cur && cur.id) {
+    const bs = await logseq.api.pageBlocks(cur.id);
+    if (bs && bs.length) return bs;
+  }
+  return [];
 }
 function _pad(n) { return n < 10 ? "0" + n : "" + n; }
 function ymd(d) { d = d || new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
@@ -106,16 +121,20 @@ const SPECS: PluginSpec[] = [
     category: "写作",
     tagline: "统计今日 journal 的字数与块数",
     body: String.raw`
-def("count-today", "字数统计：今日 journal", safe(async function () {
+def("count-today", "\u5b57\u6570\u7edf\u8ba1\uff1a\u4eca\u65e5 journal / \u5f53\u524d\u9875", safe(async function () {
   const blocks = await journalBlocks();
+  if (!blocks || blocks.length === 0) {
+    notify("\u5f53\u524d\u9875\u4e0e\u4eca\u65e5 journal \u90fd\u4e3a\u7a7a\uff0c\u8bf7\u5148\u5199\u5165\u4e00\u4e9b\u5185\u5bb9\u540e\u518d\u8c03\u7528\u3002");
+    return;
+  }
   let chars = 0, words = 0;
   for (const b of blocks) {
     const t = String(b.content || "");
     chars += t.length;
     words += (t.match(/[A-Za-z0-9]+|[\u4e00-\u9fa5]/g) || []).length;
   }
-  await appendToday("字数统计：共 " + blocks.length + " 块 / " + chars + " 字符 / " + words + " 词");
-  notify("字符 " + chars + " · 词 " + words);
+  await appendToday("\u5b57\u6570\u7edf\u8ba1\uff1a\u5171 " + blocks.length + " \u5757 / " + chars + " \u5b57\u7b26 / " + words + " \u8bcd");
+  notify("\u5b57\u7b26 " + chars + " \u00b7 \u8bcd " + words + " \u00b7 \u5757 " + blocks.length);
 }));`,
   },
   {

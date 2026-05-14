@@ -54,6 +54,94 @@
   --link: #58a6ff;
 }
 
+/* Extended themes shipped via the bundled "主题包" plugin. They tweak the
+   same CSS variables as light/dark so every component picks them up
+   automatically. */
+:root[data-theme="solarized-light"] {
+  --bg: #fdf6e3;
+  --bg-alt: #eee8d5;
+  --bg-hover: #e6dfc1;
+  --fg: #073642;
+  --fg-muted: #586e75;
+  --accent: #268bd2;
+  --accent-soft: #d4e4ef;
+  --border: #d6cfb2;
+  --link: #268bd2;
+  --danger: #dc322f;
+}
+:root[data-theme="solarized-dark"] {
+  --bg: #002b36;
+  --bg-alt: #073642;
+  --bg-hover: #0a3a47;
+  --fg: #eee8d5;
+  --fg-muted: #93a1a1;
+  --accent: #2aa198;
+  --accent-soft: #0a3a47;
+  --border: #0f4956;
+  --link: #2aa198;
+  --danger: #dc322f;
+}
+:root[data-theme="nord"] {
+  --bg: #2e3440;
+  --bg-alt: #3b4252;
+  --bg-hover: #434c5e;
+  --fg: #eceff4;
+  --fg-muted: #d8dee9;
+  --accent: #88c0d0;
+  --accent-soft: #4c566a;
+  --border: #4c566a;
+  --link: #81a1c1;
+  --danger: #bf616a;
+}
+:root[data-theme="paper"] {
+  --bg: #faf8f4;
+  --bg-alt: #f1ece1;
+  --bg-hover: #ebe4d4;
+  --fg: #2d2a26;
+  --fg-muted: #6b6258;
+  --accent: #8a5a44;
+  --accent-soft: #e9dfc8;
+  --border: #d9d0b8;
+  --link: #8a5a44;
+  --danger: #b03030;
+}
+:root[data-theme="forest"] {
+  --bg: #f3f6ef;
+  --bg-alt: #e6ecde;
+  --bg-hover: #d8e2c8;
+  --fg: #1e2b1c;
+  --fg-muted: #4b5f47;
+  --accent: #3a7d44;
+  --accent-soft: #cfe0c5;
+  --border: #b7c8a6;
+  --link: #3a7d44;
+  --danger: #b03030;
+}
+:root[data-theme="midnight"] {
+  --bg: #0b1020;
+  --bg-alt: #131a32;
+  --bg-hover: #1c2547;
+  --fg: #e4e9f7;
+  --fg-muted: #8a93b3;
+  --accent: #7aa2ff;
+  --accent-soft: #1c2547;
+  --border: #243056;
+  --link: #7aa2ff;
+  --danger: #ff7a8a;
+}
+:root[data-theme="rose"] {
+  --bg: #fff5f7;
+  --bg-alt: #ffe4ec;
+  --bg-hover: #ffd4e0;
+  --fg: #4a1d2b;
+  --fg-muted: #82485a;
+  --accent: #d6336c;
+  --accent-soft: #fbcfdb;
+  --border: #f3b7c7;
+  --link: #d6336c;
+  --danger: #b02050;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {

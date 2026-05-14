@@ -42,12 +42,56 @@ logseq.slash.register("/dv-tasks", "Dataview\uff1a\u63d2\u5165\u6240\u6709\u672a
   try {
     const tasks = await logseq.api.openTasks();
     if (!tasks || tasks.length === 0) {
-      await replaceBlock(blockId, ["- *\u6ca1\u6709\u672a\u5b8c\u6210\u4efb\u52a1*"], "\u672a\u5b8c\u6210\u4efb\u52a1");
+      // Helpful fallback: tell the user that no TODO marker was found and
+      // explain how to create one. Most users type "未完成任务 xxxx" as
+      // plain text expecting it to be a task; this clears that up.
+      const hint = [
+        "- *\u672a\u68c0\u6d4b\u5230\u4efb\u52a1\u5757\u3002*",
+        "- \u8f93\u5165 /todo \u53ef\u4ee5\u5feb\u901f\u521b\u5efa\u4e00\u4e2a TODO \u4efb\u52a1\u5757\u3002",
+        "- \u6216\u8005\u624b\u52a8\u5728\u5757\u9996\u52a0 \`TODO\u3001DOING\u3001LATER\u3001NOW\u3001WAITING\` \u4e4b\u4e00\u3002",
+        "- \u4efb\u52a1\u5757\u4f1a\u81ea\u52a8\u51fa\u73b0\u5728\u5de6\u4fa7\u201c\u65e5\u7a0b\u201d\u4e2d\u3002"
+      ];
+      await replaceBlock(blockId, hint, "\u672a\u5b8c\u6210\u4efb\u52a1 (0)");
+      logseq.api.notify("\u6ca1\u6709\u4efb\u52a1\u5757\u3002\u8f93\u5165 /todo \u521b\u5efa\u4e00\u4e2a\u3002");
       return;
     }
     const lines = tasks.slice(0, 200).map(fmtTask);
     await replaceBlock(blockId, lines, "\u672a\u5b8c\u6210\u4efb\u52a1 (" + tasks.length + ")");
     logseq.api.notify("Dataview\uff1a\u5df2\u63d2\u5165 " + tasks.length + " \u6761\u4efb\u52a1");
+  } catch (e) {
+    logseq.api.notify("\u67e5\u8be2\u5931\u8d25\uff1a" + (e && e.message ? e.message : e));
+  }
+});
+
+logseq.slash.register("/todo", "Dataview\uff1a\u628a\u5f53\u524d\u5757\u53d8\u4e3a TODO \u4efb\u52a1", async ({ blockId }) => {
+  try {
+    const b = await logseq.api.getBlock(blockId);
+    if (!b) { logseq.api.notify("\u672a\u627e\u5230\u5f53\u524d\u5757"); return; }
+    const rest = String(b.content || "").replace(/^(TODO|DOING|DONE|LATER|NOW|WAITING|CANCELLED)\s+/, "").trim();
+    const body = rest || (await logseq.api.prompt("\u4efb\u52a1\u5185\u5bb9\uff1a", "") || "").trim();
+    if (!body) { logseq.api.notify("\u672a\u8f93\u5165\u4efb\u52a1\u5185\u5bb9"); return; }
+    await logseq.api.updateBlock(blockId, "TODO " + body);
+    logseq.api.notify("\u5df2\u521b\u5efa TODO\uff0c\u53ef\u5728\u65e5\u7a0b\u4e2d\u67e5\u770b");
+  } catch (e) {
+    logseq.api.notify("\u5931\u8d25\uff1a" + (e && e.message ? e.message : e));
+  }
+});
+
+logseq.slash.register("/dv-agenda", "Dataview\uff1a\u63d2\u5165\u4eca\u65e5\u53ca\u5373\u5c06\u5230\u671f\u7684\u4efb\u52a1", async ({ blockId }) => {
+  try {
+    const rows = await logseq.api.agenda(0);
+    if (!rows || rows.length === 0) {
+      await replaceBlock(blockId, ["- *\u65e5\u7a0b\u4e3a\u7a7a*"], "\u65e5\u7a0b");
+      return;
+    }
+    const lines = rows.slice(0, 200).map((r) => {
+      const mark = r.block && r.block.task_marker ? "[" + r.block.task_marker + "] " : "";
+      const date = r.iso_date ? " \u00b7 " + r.iso_date : "";
+      const body = truncate((r.block && r.block.content) || "", 100).replace(/^(TODO|DOING|DONE|LATER|NOW|WAITING|CANCELLED)\s+/, "");
+      const page = r.page_name ? " \u00b7 [[" + r.page_name + "]]" : "";
+      return "- " + mark + body + date + page;
+    });
+    await replaceBlock(blockId, lines, "\u65e5\u7a0b (" + rows.length + ")");
   } catch (e) {
     logseq.api.notify("\u67e5\u8be2\u5931\u8d25\uff1a" + (e && e.message ? e.message : e));
   }

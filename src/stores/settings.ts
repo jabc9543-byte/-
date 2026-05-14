@@ -89,6 +89,18 @@ export function applyTheme(mode: ThemeMode) {
 
 const initial = load();
 applyTheme(initial.theme);
+// Restore an "extended" theme (set by the bundled Themes plugin) if any —
+// it overrides the system/light/dark base.
+try {
+  if (typeof document !== "undefined" && typeof localStorage !== "undefined") {
+    const extra = localStorage.getItem("quanshiwei:extra-theme");
+    if (extra && extra !== "system" && extra !== "light" && extra !== "dark") {
+      document.documentElement.setAttribute("data-theme", extra);
+    }
+  }
+} catch {
+  /* ignore */
+}
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...initial,
