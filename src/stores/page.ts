@@ -4,6 +4,18 @@ import type { Block, Page, PageId } from "../types";
 import { useFavoritesStore } from "./favorites";
 import { logMobileDebug } from "../utils/mobileDebug";
 
+/**
+ * Notify downstream views (Agenda, Calendar, Backlinks…) that block-level
+ * data may have changed so they can refresh without a manual button press.
+ */
+function emitDataChanged(): void {
+  try {
+    window.dispatchEvent(new CustomEvent("quanshiwei:data-changed"));
+  } catch {
+    /* ignore */
+  }
+}
+
 interface PageState {
   pages: Page[];
   activePageId: PageId | null;
@@ -157,6 +169,7 @@ export const usePageStore = create<PageState>((set, get) => ({
       set((s) => ({
         blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...updated } : b)),
       }));
+      emitDataChanged();
     } catch (error) {
       logMobileDebug("page.updateBlock", "error", {
         id,
@@ -187,6 +200,7 @@ export const usePageStore = create<PageState>((set, get) => ({
       content,
     );
     await get().openPage(activePageId);
+    emitDataChanged();
     return created;
   },
 
@@ -195,6 +209,7 @@ export const usePageStore = create<PageState>((set, get) => ({
     if (!activePageId) return null;
     const created = await api.insertBlock(activePageId, parentId, null, content);
     await get().openPage(activePageId);
+    emitDataChanged();
     return created;
   },
 
@@ -203,6 +218,7 @@ export const usePageStore = create<PageState>((set, get) => ({
     if (!activePageId) return null;
     const created = await api.insertBlock(activePageId, null, null, content);
     await get().openPage(activePageId);
+    emitDataChanged();
     return created;
   },
 
@@ -285,6 +301,7 @@ export const usePageStore = create<PageState>((set, get) => ({
     set((s) => ({
       blocks: s.blocks.map((b) => (b.id === id ? { ...b, ...updated } : b)),
     }));
+    emitDataChanged();
   },
 
   openToday: async () => {

@@ -1,6 +1,6 @@
 [package]
 name = "logseq-rs"
-version = "0.1.7"
+version = "0.1.8"
 description = "全视维 — 本地优先的知识图谱应用。"
 authors = ["you"]
 edition = "2021"

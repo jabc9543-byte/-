@@ -130,6 +130,7 @@ pub fn run() {
             commands::pdf::save_pdf_annotations,
             commands::pdf::import_zotero_bibtex,
             commands::clipper::receive_clip,
+            commands::net::plugin_http_fetch,
             commands::clip_token::get_clip_token,
             commands::clip_token::rotate_clip_token,
             commands::clip_log::clip_log,

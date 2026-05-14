@@ -13,6 +13,7 @@ pub mod graph;
 pub mod history;
 pub mod journal;
 pub mod marketplace;
+pub mod net;
 pub mod page;
 pub mod pdf;
 pub mod plugin;

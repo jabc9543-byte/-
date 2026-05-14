@@ -23,12 +23,16 @@ async function appendToday(text) {
   const p = await _today();
   if (!p || !p.id) { logseq.api.notify("无法获取今日 journal"); return null; }
   await logseq.api.insertBlock(p.id, null, null, text);
+  // Surface the result to the user immediately: open the journal page and
+  // emit a data-changed event so views like Agenda / Calendar refresh.
+  try { await logseq.api.openPage(p.id); } catch (_) {}
   return p.id;
 }
 async function appendCurrent(text) {
   const p = await _current();
   if (!p || !p.id) { logseq.api.notify("无法定位目标页面"); return null; }
   await logseq.api.insertBlock(p.id, null, null, text);
+  try { await logseq.api.openPage(p.id); } catch (_) {}
   return p.id;
 }
 async function journalBlocks() {
@@ -537,7 +541,20 @@ def("prompt-random", "灵感：随机写作题目", safe(async function () {
     perms: ["commands", "readBlocks", "writeBlocks", "http"],
     body: String.raw`
 def("weather-stamp", "天气：写入今日天气", safe(async function () {
-  const res = await logseq.api.httpFetch("https://wttr.in/?format=%l:+%C+%t+%w");
+  // wttr.in expects literal %l/%C/%t/%w placeholders; encode them in the URL
+  // so reqwest's strict URL parser accepts the request.
+  const url = "https://wttr.in/?format=%25l%3A+%25C+%25t+%25w&lang=zh-cn";
+  const res = await logseq.api.httpFetch(url, { headers: { "User-Agent": "curl/8" } });
+  const line = String((res && res.body) || "").trim();
+  if (!line || /^\s*<!DOCTYPE/i.test(line)) { notify("未取到天气（接口返回 HTML，可能被本地网络拦截）"); return; }
+  await appendToday("🌤️ " + line);
+  notify(line);
+}));
+def("weather-city", "天气：按城市写入", safe(async function () {
+  const city = await logseq.api.prompt("城市（拼音或英文，如 beijing / Shanghai）：", "beijing");
+  if (city === null) return;
+  const url = "https://wttr.in/" + encodeURIComponent(city.trim()) + "?format=%25l%3A+%25C+%25t+%25w&lang=zh-cn";
+  const res = await logseq.api.httpFetch(url, { headers: { "User-Agent": "curl/8" } });
   const line = String((res && res.body) || "").trim();
   if (!line) { notify("未取到天气"); return; }
   await appendToday("🌤️ " + line);

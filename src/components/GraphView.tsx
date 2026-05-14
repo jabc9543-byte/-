@@ -193,7 +193,7 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
           ctx.strokeStyle = "#059669";
           ctx.stroke();
         }
-        if (isTouch || isFocus || isHover || n.r > 10) {
+        if (isTouch || isFocus || isHover || n.r > 10 || true) {
           ctx.fillStyle = "rgba(20,20,30,0.9)";
           const fontSize = isTouch
             ? Math.max(9, Math.min(12, 8 + n.r / 4))
@@ -341,6 +341,17 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("wheel", onWheel, { passive: false });
+    const onDblClick = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const clicked = findNode(px, py);
+      if (clicked) {
+        showPage();
+        openPage(clicked.id);
+      }
+    };
+    canvas.addEventListener("dblclick", onDblClick);
     const onResize = () => {
       resize();
       sim.force("center", forceCenter(width() / 2, height() / 2));
@@ -358,6 +369,7 @@ export function GraphView({ focusPageId, focusDepth = 2 }: GraphViewProps = {}) 
       canvas.removeEventListener("touchmove", onTouchMove);
       canvas.removeEventListener("touchend", onTouchEnd);
       canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("dblclick", onDblClick);
       window.removeEventListener("resize", onResize);
     };
   }, [stats, openPage, showPage, focusPageId, focusDepth, isTouch]);

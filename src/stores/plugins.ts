@@ -458,26 +458,17 @@ async function dispatchRpc(
         headers?: Record<string, string>;
         body?: string;
       };
-      const ac = new AbortController();
-      const timeout = setTimeout(() => ac.abort(), 20_000);
+      // Route through Tauri so the request is not bound by WebView CORS.
       try {
-        const res = await fetch(url, {
-          method: init.method ?? "GET",
-          headers: init.headers,
-          body: init.body,
-          signal: ac.signal,
-        });
-        const text = await res.text();
-        const headers: Record<string, string> = {};
-        res.headers.forEach((v, k) => {
-          headers[k] = v;
-        });
-        if (text.length > 2 * 1024 * 1024) {
-          throw new Error("response body exceeds 2 MiB cap");
-        }
-        return { status: res.status, headers, body: text };
-      } finally {
-        clearTimeout(timeout);
+        const res = (await invoke("plugin_http_fetch", { url, init })) as {
+          status: number;
+          headers: Record<string, string>;
+          body: string;
+        };
+        return res;
+      } catch (e) {
+        // Surface server-side error message verbatim so plugin code can log it.
+        throw new Error("plugin_http_fetch: " + String(e));
       }
     }
     case "obsidianWritePage": {

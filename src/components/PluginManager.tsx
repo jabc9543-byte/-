@@ -38,6 +38,7 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [plazaCategory, setPlazaCategory] = useState<string>("全部");
   const [plazaQuery, setPlazaQuery] = useState("");
+  const [detailFor, setDetailFor] = useState<string | null>(null);
 
   useEffect(() => {
     refresh().catch(() => {});
@@ -185,6 +186,12 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
                       />
                       启用
                     </label>
+                    <button
+                      className="plugin-detail-btn"
+                      onClick={() => setDetailFor(p.manifest.id)}
+                    >
+                      查看详情
+                    </button>
                     <button
                       className="plugin-uninstall"
                       onClick={async () => {
@@ -467,6 +474,155 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
       )}
 
       {tab === "clipper" && <ClipperPanel />}
+      {detailFor && (
+        <PluginDetailModal
+          pluginId={detailFor}
+          onClose={() => setDetailFor(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function PluginDetailModal({
+  pluginId,
+  onClose,
+}: {
+  pluginId: string;
+  onClose: () => void;
+}) {
+  const list = usePluginStore((s) => s.list);
+  const commands = usePluginStore((s) => s.commands);
+  const slashCommands = usePluginStore((s) => s.slashCommands);
+  const runCommand = usePluginStore((s) => s.runCommand);
+  const plugin = list.find((p) => p.manifest.id === pluginId);
+  if (!plugin) return null;
+  const m = plugin.manifest;
+  const cmds = commands.filter((c) => c.pluginId === pluginId);
+  const slashes = slashCommands.filter((c) => c.pluginId === pluginId);
+
+  const guides: Record<string, string[]> = {
+    "com.logseqrs.web-clipper": [
+      "1) 启用本插件后，点击「插件 → Web Clipper」选项卡查看 token 与端点。",
+      "2) 在浏览器安装 Obsidian Web Clipper 扩展，把 endpoint 设为 http://127.0.0.1:33333/clip ，把 Authorization 改为 Bearer <token>。",
+      "3) 任意网页右键「Clip to Logseq-rs」，剪藏内容会立即写入今日 journal。",
+      "4) 想验证管道是否通畅，可点击下面的「一键测试发送」。",
+    ],
+    "com.logseqrs.insert-helpers": [
+      "1) 把光标放在任意块上。",
+      "2) 输入 /formula、/inline-formula、/link、/image-url、/code、/table-2x2、/hr 之一。",
+      "3) 按提示输入即可。也可以点击下方「运行示例」直接在今日 journal 中插入示例。",
+    ],
+    "com.logseqrs.weather-stamp": [
+      "1) 启用并运行命令「天气：写入今日天气」即可在今日 journal 追加一行天气。",
+      "2) 「天气：按城市写入」会弹窗让你输入城市拼音。",
+      "3) 插件通过 Tauri 原生 HTTP 调用 wttr.in ，不受浏览器 CORS 限制。",
+    ],
+  };
+  const guide = guides[m.id];
+
+  return (
+    <div className="plugin-detail-modal-backdrop" onClick={onClose}>
+      <div className="plugin-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="plugin-detail-head">
+          <div>
+            <h3>
+              {m.icon ? <span style={{ marginRight: 6 }}>{m.icon}</span> : null}
+              {m.name}
+              <span className="plugin-version" style={{ marginLeft: 8 }}>
+                v{m.version || "?"}
+              </span>
+            </h3>
+            {m.tagline && <p className="plugin-detail-tagline">{m.tagline}</p>}
+          </div>
+          <button className="pdf-close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="plugin-detail-body">
+          {m.description && (
+            <section>
+              <h4>简介</h4>
+              <p className="plugin-desc">{m.description}</p>
+            </section>
+          )}
+          {guide && (
+            <section>
+              <h4>使用流程</h4>
+              <ol className="plugin-detail-guide">
+                {guide.map((g, i) => (
+                  <li key={i}>{g}</li>
+                ))}
+              </ol>
+            </section>
+          )}
+          <section>
+            <h4>权限</h4>
+            <div className="plugin-perms">
+              {m.permissions.map((pm) => (
+                <span key={pm} className="plugin-perm">
+                  {pm}
+                </span>
+              ))}
+            </div>
+          </section>
+          {cmds.length > 0 && (
+            <section>
+              <h4>命令（{cmds.length}）</h4>
+              <ul className="plugin-detail-cmd-list">
+                {cmds.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      className="plugin-command"
+                      onClick={() => runCommand(pluginId, c.id)}
+                    >
+                      ▸ {c.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {slashes.length > 0 && (
+            <section>
+              <h4>斜杠命令（{slashes.length}）</h4>
+              <ul className="plugin-detail-slash-list">
+                {slashes.map((s) => (
+                  <li key={s.trigger}>
+                    <code>{s.trigger}</code>
+                    <span style={{ marginLeft: 8 }}>{s.label}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="plugin-detail-hint">
+                在编辑器中输入对应斜杠即可调用。
+              </p>
+            </section>
+          )}
+          {cmds.length > 0 && (
+            <section>
+              <h4>示例演示</h4>
+              <button
+                className="plugin-detail-demo"
+                onClick={() => runCommand(pluginId, cmds[0].id)}
+              >
+                运行示例：{cmds[0].label}
+              </button>
+            </section>
+          )}
+          <section className="plugin-detail-meta">
+            <div>
+              <strong>作者</strong>：{m.author || "—"}
+            </div>
+            <div>
+              <strong>分类</strong>：{m.category || "—"}
+            </div>
+            <div>
+              <strong>类型</strong>：{m.kind === "obsidian" ? "Obsidian 兼容" : "原生"}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
@@ -479,6 +635,8 @@ function ClipperPanel() {
   const [rotating, setRotating] = useState(false);
   const [log, setLog] = useState<ClipLogEntry[]>([]);
   const [logError, setLogError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
   const exampleUrl =
     "quanshiwei://clip?title=Example&url=https%3A%2F%2Fexample.com&body=Hello%20from%20clipper&tags=demo,clip";
   const obsidianTemplate =
@@ -630,6 +788,53 @@ function ClipperPanel() {
         <button onClick={() => copy(curlSample, "curl")}>
           {copied === "curl" ? "已复制" : "复制"}
         </button>
+      </div>
+      <p>一键测试：直接通过应用内 HTTP 客户端向本地端点发送一条示例剪藏。</p>
+      <div className="plugin-clipper-actions">
+        <button
+          disabled={testing || !token}
+          onClick={async () => {
+            if (!token) return;
+            setTesting(true);
+            setTestStatus(null);
+            try {
+              const res = await invoke<{ status: number; body: string }>(
+                "plugin_http_fetch",
+                {
+                  url: httpEndpoint,
+                  init: {
+                    method: "POST",
+                    headers: {
+                      "content-type": "application/json",
+                      "x-clip-token": token,
+                    },
+                    body: JSON.stringify({
+                      title: "Clipper 测试 " + new Date().toLocaleTimeString(),
+                      url: "https://example.com",
+                      body: "这是一条由「一键测试发送」按钮触发的剪藏。",
+                      tags: ["clipper-test"],
+                    }),
+                  },
+                },
+              );
+              setTestStatus(
+                `HTTP ${res.status} · ${res.body.slice(0, 200) || "(空响应)"}`,
+              );
+              refreshLog();
+            } catch (e) {
+              setTestStatus("失败：" + String(e));
+            } finally {
+              setTesting(false);
+            }
+          }}
+        >
+          {testing ? "正在发送…" : "🚀 一键测试发送"}
+        </button>
+        {testStatus && (
+          <code className="plugin-clipper-example" style={{ flex: 1 }}>
+            {testStatus}
+          </code>
+        )}
       </div>
       <p>浏览器扩展中调用：</p>
       <div className="plugin-clipper-actions">

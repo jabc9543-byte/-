@@ -6,6 +6,7 @@ import { EXCALIDRAW_MAIN_JS } from "./excalidraw";
 import { WEB_CLIPPER_MAIN_JS } from "./webClipper";
 import { THEMES_MAIN_JS } from "./themes";
 import { OBSIDIAN_PACK } from "./obsidianPack";
+import { INSERT_HELPERS_MAIN_JS } from "./insertHelpers";
 
 export interface BundledPlugin {
   manifest: PluginManifest;
@@ -114,6 +115,23 @@ export const BUNDLED_PLUGINS: BundledPlugin[] = [
       tagline: "一键切换主题，立即生效",
     },
     source: THEMES_MAIN_JS,
+  },
+  {
+    manifest: {
+      id: "com.logseqrs.insert-helpers",
+      name: "插入助手",
+      version: "0.1.0",
+      description:
+        "向当前块快速插入：公式（块级 $$ 与行内 $）、网页链接、图片、代码块、表格、分割线。斜杠：/formula、/inline-formula、/link、/image-url、/code、/table-2x2、/hr。命令：插入助手：演示。",
+      author: "全视维 官方",
+      entry: "main.js",
+      permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks"],
+      kind: "native",
+      category: "生产力",
+      icon: "➕",
+      tagline: "一键插入公式、链接、图片、代码",
+    },
+    source: INSERT_HELPERS_MAIN_JS,
   },
   ...OBSIDIAN_PACK,
 ];
