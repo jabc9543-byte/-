@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { usePluginStore, type MarketplaceEntry } from "../stores/plugins";
+import { usePluginStore, type MarketplaceEntry, type PluginManifest } from "../stores/plugins";
 import { BUNDLED_PLUGINS } from "../plugins/bundled";
 
 interface ClipLogEntry {
@@ -39,6 +39,7 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
   const [plazaCategory, setPlazaCategory] = useState<string>("全部");
   const [plazaQuery, setPlazaQuery] = useState("");
   const [detailFor, setDetailFor] = useState<string | null>(null);
+  const [previewFor, setPreviewFor] = useState<string | null>(null);
 
   useEffect(() => {
     refresh().catch(() => {});
@@ -314,6 +315,12 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
                           </div>
                           <div className="plugin-plaza-actions">
                             <button
+                              className="plugin-detail-btn"
+                              onClick={() => setPreviewFor(manifest.id)}
+                            >
+                              查看详情
+                            </button>
+                            <button
                               className="plugin-market-install"
                               disabled={disabled}
                               onClick={async () => {
@@ -480,6 +487,24 @@ export function PluginManager({ onClose }: { onClose: () => void }) {
           onClose={() => setDetailFor(null)}
         />
       )}
+      {previewFor && (
+        <PluginPreviewModal
+          pluginId={previewFor}
+          onClose={() => setPreviewFor(null)}
+          onInstall={async (m, src) => {
+            setBusy(m.id);
+            try {
+              await installBundled(m, src);
+              setPreviewFor(null);
+            } catch (e) {
+              alert(`安装失败：${String(e)}`);
+            } finally {
+              setBusy(null);
+            }
+          }}
+          isInstalled={installedById.has(previewFor)}
+        />
+      )}
     </div>
   );
 }
@@ -504,9 +529,10 @@ function PluginDetailModal({
   const guides: Record<string, string[]> = {
     "com.logseqrs.web-clipper": [
       "1) 启用本插件后，点击「插件 → Web Clipper」选项卡查看 token 与端点。",
-      "2) 在浏览器安装 Obsidian Web Clipper 扩展，把 endpoint 设为 http://127.0.0.1:33333/clip ，把 Authorization 改为 Bearer <token>。",
-      "3) 任意网页右键「Clip to Logseq-rs」，剪藏内容会立即写入今日 journal。",
-      "4) 想验证管道是否通畅，可点击下面的「一键测试发送」。",
+      "2) 从 GitHub Releases 下载 quanshiwei-web-clipper-v*.zip ，解压后加载到 Chrome/Edge 「开发者模式」。",
+      "3) 在扩展 Settings 中粘贴 token。",
+      "4) 任意网页右键「剪藏到全视维」，内容会立即写入今日 journal。",
+      "5) 想验证管道可点击 Clipper 面板的「🚀 一键测试发送」。",
     ],
     "com.logseqrs.insert-helpers": [
       "1) 把光标放在任意块上。",
@@ -627,6 +653,167 @@ function PluginDetailModal({
   );
 }
 
+// Pre-install preview modal: takes a bundled plugin manifest and shows the
+// same level of detail as PluginDetailModal but without requiring the plugin
+// to be installed (commands/slash lists are derived from manifest metadata).
+function PluginPreviewModal({
+  pluginId,
+  onClose,
+  onInstall,
+  isInstalled,
+}: {
+  pluginId: string;
+  onClose: () => void;
+  onInstall: (m: PluginManifest, source: string) => void | Promise<void>;
+  isInstalled: boolean;
+}) {
+  const entry = BUNDLED_PLUGINS.find((b) => b.manifest.id === pluginId);
+  if (!entry) return null;
+  const m = entry.manifest;
+
+  // Derive command/slash lists by parsing the bundled source (we register via
+  // `def("id", "label", …)`, `logseq.commands.register("id","label",…)` and
+  // `logseq.slash.register("/x","label",…)`).
+  const src = entry.source;
+  const cmdMatches: { id: string; label: string }[] = [];
+  const slashMatches: { trigger: string; label: string }[] = [];
+  const cmdRe =
+    /(?:logseq\.commands\.register|def)\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']/g;
+  const slashRe =
+    /logseq\.slash\.register\s*\(\s*["'](\/[^"']+)["']\s*,\s*["']([^"']+)["']/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = cmdRe.exec(src))) cmdMatches.push({ id: mm[1], label: mm[2] });
+  while ((mm = slashRe.exec(src)))
+    slashMatches.push({ trigger: mm[1], label: mm[2] });
+
+  const guides: Record<string, string[]> = {
+    "com.logseqrs.web-clipper": [
+      "1) 点击下方「安装」按钮安装插件。",
+      "2) 在「插件 → Clipper」面板查看 token 与本地端点。",
+      "3) 安装并启用「全视维 Web Clipper」浏览器扩展（下载链接见 GitHub Release），把 token 粘贴进去。",
+      "4) 在任意网页右键「剪藏到全视维」，内容会立即写入今日 journal。",
+      "5) 想验证管道可点击 Clipper 面板的「🚀 一键测试发送」。",
+    ],
+    "com.logseqrs.insert-helpers": [
+      "1) 安装并启用本插件。",
+      "2) 在任意块中输入 /formula、/inline-formula、/link、/image-url、/code、/table-2x2、/hr 之一。",
+      "3) 按提示输入即可。",
+    ],
+    "com.logseqrs.weather-stamp": [
+      "1) 安装并启用本插件。",
+      "2) 运行命令「天气：写入今日天气」即可在今日 journal 追加一行天气。",
+      "3) 插件通过 Tauri 原生 HTTP 调用 wttr.in ，不受浏览器 CORS 限制。",
+    ],
+  };
+  const guide = guides[m.id];
+
+  return (
+    <div className="plugin-detail-modal-backdrop" onClick={onClose}>
+      <div className="plugin-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="plugin-detail-head">
+          <div>
+            <h3>
+              {m.icon ? <span style={{ marginRight: 6 }}>{m.icon}</span> : null}
+              {m.name}
+              <span className="plugin-version" style={{ marginLeft: 8 }}>
+                v{m.version || "?"}
+              </span>
+              {isInstalled && (
+                <span className="plugin-market-badge installed" style={{ marginLeft: 8 }}>
+                  已安装
+                </span>
+              )}
+            </h3>
+            {m.tagline && <p className="plugin-detail-tagline">{m.tagline}</p>}
+          </div>
+          <button className="pdf-close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="plugin-detail-body">
+          {m.description && (
+            <section>
+              <h4>简介</h4>
+              <p className="plugin-desc">{m.description}</p>
+            </section>
+          )}
+          {guide && (
+            <section>
+              <h4>使用流程</h4>
+              <ol className="plugin-detail-guide">
+                {guide.map((g, i) => (
+                  <li key={i}>{g}</li>
+                ))}
+              </ol>
+            </section>
+          )}
+          <section>
+            <h4>权限</h4>
+            <div className="plugin-perms">
+              {m.permissions.map((pm) => (
+                <span key={pm} className="plugin-perm">
+                  {pm}
+                </span>
+              ))}
+            </div>
+          </section>
+          {cmdMatches.length > 0 && (
+            <section>
+              <h4>命令（{cmdMatches.length}）</h4>
+              <ul className="plugin-detail-cmd-list">
+                {cmdMatches.map((c) => (
+                  <li key={c.id}>
+                    <span className="plugin-command" style={{ cursor: "default" }}>
+                      ▸ {c.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {slashMatches.length > 0 && (
+            <section>
+              <h4>斜杠命令（{slashMatches.length}）</h4>
+              <ul className="plugin-detail-slash-list">
+                {slashMatches.map((s) => (
+                  <li key={s.trigger}>
+                    <code>{s.trigger}</code>
+                    <span style={{ marginLeft: 8 }}>{s.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <section className="plugin-detail-meta">
+            <div>
+              <strong>作者</strong>：{m.author || "—"}
+            </div>
+            <div>
+              <strong>分类</strong>：{m.category || "—"}
+            </div>
+            <div>
+              <strong>类型</strong>：{m.kind === "obsidian" ? "Obsidian 兼容" : "原生"}
+            </div>
+          </section>
+          <section style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button className="plugin-detail-btn" onClick={onClose}>
+              关闭
+            </button>
+            {!isInstalled && (
+              <button
+                className="plugin-detail-demo"
+                onClick={() => onInstall(m, entry.source)}
+              >
+                立即安装
+              </button>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClipperPanel() {
   const [copied, setCopied] = useState<string | null>(null);
   const [token, setToken] = useState<string>("");
@@ -639,8 +826,6 @@ function ClipperPanel() {
   const [testing, setTesting] = useState(false);
   const exampleUrl =
     "quanshiwei://clip?title=Example&url=https%3A%2F%2Fexample.com&body=Hello%20from%20clipper&tags=demo,clip";
-  const obsidianTemplate =
-    "quanshiwei://clip?title={{title}}&url={{url}}&body={{content}}&tags={{tags}}";
   const httpEndpoint = "http://127.0.0.1:33333/clip";
   useEffect(() => {
     let mounted = true;
@@ -726,12 +911,11 @@ function ClipperPanel() {
   return (
     <div className="plugin-clipper">
       <p>
-        全视维内置 <strong>Web Clipper 接收器</strong>，可以接收来自浏览器扩展
-        （如 <em>Obsidian Web Clipper</em>）的剪藏，写入今日 journal 或新建页面。
+        全视维内置 <strong>Web Clipper 接收器</strong>，可以接收来自
+        《全视维 Web Clipper》浏览器扩展的剪藏，写入今日 journal 或新建页面。
       </p>
       <p>
-        支持两条接收通道：<strong>本地 HTTP 端口</strong>（推荐，免协议提示）
-        和 <strong>URL Scheme</strong>（兼容现有 Obsidian Web Clipper 模板）。
+        支持两条接收通道：<strong>本地 HTTP 端口</strong>（推荐）和 <strong>URL Scheme</strong>。
       </p>
 
       <h4>1. 本地 HTTP 端口（推荐）</h4>
@@ -865,96 +1049,48 @@ function ClipperPanel() {
         </button>
       </div>
 
-      <h4>3. Obsidian Web Clipper 配置</h4>
-      <ol className="plugin-clipper-steps">
-        <li>在浏览器安装 <strong>Obsidian Web Clipper</strong>。</li>
-        <li>新建一个 Template，将 Behavior 设为 <code>Open in browser</code>（或自定义 URL）。</li>
-        <li>把 URL 模板设置为：</li>
-      </ol>
-      <div className="plugin-clipper-actions">
-        <code className="plugin-clipper-example">{obsidianTemplate}</code>
-        <button onClick={() => copy(obsidianTemplate, "template")}>
-          {copied === "template" ? "已复制" : "复制"}
-        </button>
-      </div>
-      <p className="plugin-clipper-hint">
-        如果模板里使用 Markdown 转 Frontmatter 字段（如 <code>{"{{ tags|join:\",\" }}"}</code>），
-        请确保最终是逗号分隔的字符串。
+      <h4>3. 全视维官方浏览器扩展</h4>
+      <p>
+        我们提供自研、零依赖的 <strong>全视维 Web Clipper</strong> 浏览器扩展，
+        直接 <code>POST</code> 到本应用，不再依赖任何第三方剪藏工具。
+        源码与可下载的安装包都在 GitHub 仓库。
       </p>
-
-      <h4>3.1 详细操作步骤（完全对齐 Obsidian Web Clipper）</h4>
       <ol className="plugin-clipper-steps">
         <li>
-          <strong>安装扩展</strong>：
+          <strong>下载并解压</strong>：到 GitHub Releases 下载
+          <code>quanshiwei-web-clipper-v*.zip</code> 并解压到任意位置。
+        </li>
+        <li>
+          <strong>加载扩展</strong>：浏览器地址栏访问
+          <code>chrome://extensions</code> / <code>edge://extensions</code>，
+          打开「开发者模式」，点击「加载已解压的扩展」，选择解压目录。
+        </li>
+        <li>
+          <strong>填入 token</strong>：点击工具栏的「全视维 Clipper」图标 → Settings，
+          把上方复制的 token 粘贴进去并保存。
+        </li>
+        <li>
+          <strong>开始剪藏</strong>：
           <ul>
-            <li>Chrome / Edge：在 Chrome Web Store 搜索 <em>Obsidian Web Clipper</em> 安装。</li>
-            <li>Firefox：在 Add-ons 应用市场搜索同名扩展安装。</li>
-            <li>Safari：从 App Store 安装 Obsidian Web Clipper Safari Extension。</li>
+            <li>点工具栏图标 → 「剪藏整页」：自动 Readability 提取正文 + 标题。</li>
+            <li>选中网页文本 → 工具栏图标 → 「剪藏选区」：仅保存选区。</li>
+            <li>右键链接 → 「剪藏到全视维」：保存 URL + 标题到今日 journal。</li>
           </ul>
-        </li>
-        <li>
-          <strong>连接本应用</strong>：在浏览器扩展 <em>Settings · General</em> 中：
-          <ul>
-            <li>把 <em>Vault</em> 选项切换到 <em>Custom URL</em> 或 <em>Webhook</em>。</li>
-            <li>URL 填入：<code>{httpEndpoint}</code></li>
-            <li>添加 Header：<code>X-Clip-Token</code> = 上方"复制"按钮取到的 token。</li>
-            <li>Method 选 <code>POST</code>，Body 选 <code>JSON</code>。</li>
-          </ul>
-        </li>
-        <li>
-          <strong>创建模板</strong>：在扩展 <em>Settings · Templates</em> 新建：
-          <ul>
-            <li>Name：例如"剪藏到全视维"。</li>
-            <li>Trigger：根据网页规则（可留空使用默认）。</li>
-            <li>Behavior：<em>Custom URL</em> 或 <em>Webhook</em>。</li>
-            <li>Output：勾选 <em>Include frontmatter</em>，按需勾选 <em>Selection only</em>、<em>Convert images to base64</em>。</li>
-          </ul>
-        </li>
-        <li>
-          <strong>模板变量对照表</strong>（粘贴到 URL 或 Body 模板）：
-          <pre className="plugin-clipper-code">
-{`{{title}}              页面标题
-{{url}}                源 URL
-{{content}}            完整 Markdown 正文
-{{selectionMarkdown}}  仅当前选区
-{{tags}}               以逗号分隔的标签
-{{date}}               当前日期 YYYY-MM-DD
-{{readingTime}}        预计阅读时间
-{{author}} {{site}}    站点元数据`}
-          </pre>
-        </li>
-        <li>
-          <strong>Behavior 三种模式</strong>：
-          <ul>
-            <li><em>Open in browser</em>：扩展打开 <code>quanshiwei://clip?...</code>，由 OS 唤起应用。</li>
-            <li><em>Custom URL (POST)</em>：扩展直接 POST 到 <code>{httpEndpoint}</code>，最稳。</li>
-            <li><em>Copy to clipboard</em>：仅复制 Markdown，由你手动粘贴到本应用。</li>
-          </ul>
-        </li>
-        <li>
-          <strong>截取范围</strong>：
-          <ul>
-            <li><em>Full page</em>：默认，整页 Markdown。</li>
-            <li><em>Selection only</em>：仅当前选区。</li>
-            <li><em>Reader view</em>：先进入阅读视图再剪藏，去除广告/侧栏。</li>
-            <li><em>Highlight only</em>：搭配 <code>{`{{selectionMarkdown}}`}</code> 仅传高亮。</li>
-          </ul>
-        </li>
-        <li>
-          <strong>测试剪藏</strong>：在任意网页打开扩展弹窗，选择模板，点击 <em>Clip</em>。
-          应用端会出现一条「剪藏完成」通知；本面板「最近请求」会即时刷新。
         </li>
         <li>
           <strong>故障排查</strong>：
           <ul>
-            <li><code>401</code>：X-Clip-Token 未填或不匹配。点击上方"重新生成"后同步到扩展。</li>
-            <li><code>400</code>：请求体不是合法 JSON。检查扩展 Body 选项与 Content-Type。</li>
-            <li><code>未返回 page_name</code>：是 journal 模式，已追加到今日 journal。</li>
-            <li>页面无变化：本面板「最近请求」也未出现 → 检查扩展 URL/Header；
-              再试 <code>GET http://127.0.0.1:33333/health</code>。</li>
+            <li><code>401</code>：token 不匹配，重新复制后保存到扩展。</li>
+            <li><code>400</code>：扩展不是最新版，去 Releases 重新下载。</li>
+            <li>连不上 33333：确认本应用运行中；防火墙允许「私有网络」。</li>
           </ul>
         </li>
       </ol>
+      <p className="plugin-clipper-hint">
+        想要自己接入？请求体格式见上面 <em>「请求体（JSON）」</em>。
+        端点不变就能配合任何能发 POST 的工具（curl / fetch / 自动化脚本）。
+      </p>
+
 
       <h4>4. 最近请求</h4>
       <p className="plugin-clipper-hint">

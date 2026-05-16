@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>全视维 Web Clipper</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>📎 全视维 Web Clipper</h1>
+  </header>
+
+  <section class="actions">
+    <button id="clip-page" class="primary">剪藏整页</button>
+    <button id="clip-selection">剪藏选区</button>
+    <button id="ping">测试连接</button>
+  </section>
+
+  <section id="status" class="status"></section>
+
+  <details class="settings">
+    <summary>⚙️ Settings</summary>
+    <label>
+      接收端点
+      <input id="endpoint" type="text" placeholder="http://127.0.0.1:33333/clip" />
+    </label>
+    <label>
+      X-Clip-Token
+      <input id="token" type="password" placeholder="粘贴桌面端复制的 token" />
+    </label>
+    <button id="save" class="primary">保存</button>
+    <p class="hint">
+      token 与端点保存在 <code>chrome.storage.sync</code>。如需重置 token，请到桌面端
+      「插件 · Clipper」面板点击「重新生成」并再次粘贴。
+    </p>
+  </details>
+
+  <footer>
+    <a href="https://github.com/jabc9543-byte/-" target="_blank" rel="noopener">GitHub 仓库</a>
+    · v0.1.0
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 {
   "name": "logseq-rs",
   "private": true,
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "description": "全视维 - 使用 Rust + Tauri + React + TypeScript 重构的本地优先知识图谱应用。",
   "scripts": {
@@ -18,7 +18,9 @@
     "package:appimage": "tauri build --bundles appimage",
     "package:updater": "tauri build --bundles updater",
     "signer:keygen": "tauri signer generate -w ~/.tauri/logseq-rs.key",
-    "icons": "tauri icon src-tauri/icons/app-source.png --output src-tauri/icons"
+    "icons": "tauri icon src-tauri/icons/app-source.png --output src-tauri/icons",
+    "pack:clipper-icons": "node scripts/make-clipper-icons.cjs",
+    "pack:clipper": "node scripts/make-clipper-icons.cjs && node scripts/pack-clipper.cjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.10.1",
@@ -27,6 +29,7 @@
     "@tauri-apps/plugin-fs": "^2.0.3",
     "@types/d3-force": "^3.0.10",
     "d3-force": "^3.0.0",
+    "katex": "^0.16.47",
     "nanoid": "^5.0.9",
     "pdfjs-dist": "^4.7.76",
     "react": "^18.3.1",

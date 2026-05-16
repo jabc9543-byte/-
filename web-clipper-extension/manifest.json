@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "全视维 Web Clipper",
+  "short_name": "QSW Clipper",
+  "version": "0.1.0",
+  "description": "把任意网页 / 选区 / 链接一键剪藏到「全视维」桌面端的今日 journal 或新页面。完全自研，零第三方依赖。",
+  "permissions": ["activeTab", "storage", "scripting", "contextMenus", "notifications"],
+  "host_permissions": ["http://127.0.0.1:33333/*", "<all_urls>"],
+  "action": {
+    "default_title": "全视维 Web Clipper",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "quanshiwei-web-clipper@quanshiwei.app",
+      "strict_min_version": "109.0"
+    }
+  }
+}

@@ -1,4 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import { usePageStore } from "../stores/page";
 import { api } from "../api";
 import { AssetMedia } from "./AssetMedia";
@@ -27,9 +29,9 @@ interface Token {
   /** 起点（含），原文偏移量。 */
   start: number;
   end: number;
-  kind: "page" | "tag" | "block" | "bold" | "italic" | "code" | "media";
+  kind: "page" | "tag" | "block" | "bold" | "italic" | "code" | "media" | "math-block" | "math-inline" | "link";
   value: string;
-  /** Optional secondary value (alt text for media). */
+  /** Optional secondary value (alt text for media, href for link). */
   alt?: string;
 }
 
@@ -43,28 +45,34 @@ function tokenize(content: string): Token[] {
   const tokens: Token[] = [];
   // 注意：先 media、page、block，再 tag/bold/italic/code，避免 #tag 误吃到 [[#x]] 内部。
   const re =
-    /!\[([^\]\n]*)\]\(([^)\s]+)\)|\[\[([^\[\]\n]+?)\]\]|\(\(([A-Za-z0-9_\-]{6,})\)\)|(?:^|\s)#([\p{L}\p{N}_\-/]+)|\*\*([^*\n]+?)\*\*|(?<!\*)\*([^*\n]+?)\*(?!\*)|`([^`\n]+?)`/gu;
+    /\$\$([\s\S]+?)\$\$|(?<!\\)\$([^$\n]+?)\$|!\[([^\]\n]*)\]\(([^)\s]+)\)|\[([^\[\]\n]+?)\]\((https?:\/\/[^)\s]+)\)|\[\[([^\[\]\n]+?)\]\]|\(\(([A-Za-z0-9_\-]{6,})\)\)|(?:^|\s)#([\p{L}\p{N}_\-/]+)|\*\*([^*\n]+?)\*\*|(?<!\*)\*([^*\n]+?)\*(?!\*)|`([^`\n]+?)`/gu;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content))) {
     const full = m[0];
-    let start = m.index;
-    let end = start + full.length;
-    if (m[1] !== undefined && m[2] !== undefined) {
-      tokens.push({ start, end, kind: "media", value: m[2], alt: m[1] });
-    } else if (m[3] !== undefined) {
-      tokens.push({ start, end, kind: "page", value: m[3].trim() });
-    } else if (m[4] !== undefined) {
-      tokens.push({ start, end, kind: "block", value: m[4] });
-    } else if (m[5] !== undefined) {
+    const start = m.index;
+    const end = start + full.length;
+    if (m[1] !== undefined) {
+      tokens.push({ start, end, kind: "math-block", value: m[1] });
+    } else if (m[2] !== undefined) {
+      tokens.push({ start, end, kind: "math-inline", value: m[2] });
+    } else if (m[3] !== undefined && m[4] !== undefined) {
+      tokens.push({ start, end, kind: "media", value: m[4], alt: m[3] });
+    } else if (m[5] !== undefined && m[6] !== undefined) {
+      tokens.push({ start, end, kind: "link", value: m[5], alt: m[6] });
+    } else if (m[7] !== undefined) {
+      tokens.push({ start, end, kind: "page", value: m[7].trim() });
+    } else if (m[8] !== undefined) {
+      tokens.push({ start, end, kind: "block", value: m[8] });
+    } else if (m[9] !== undefined) {
       // 把前置空白排除在 token 之外
       const tagStart = full.startsWith("#") ? start : start + 1;
-      tokens.push({ start: tagStart, end, kind: "tag", value: m[5] });
-    } else if (m[6] !== undefined) {
-      tokens.push({ start, end, kind: "bold", value: m[6] });
-    } else if (m[7] !== undefined) {
-      tokens.push({ start, end, kind: "italic", value: m[7] });
-    } else if (m[8] !== undefined) {
-      tokens.push({ start, end, kind: "code", value: m[8] });
+      tokens.push({ start: tagStart, end, kind: "tag", value: m[9] });
+    } else if (m[10] !== undefined) {
+      tokens.push({ start, end, kind: "bold", value: m[10] });
+    } else if (m[11] !== undefined) {
+      tokens.push({ start, end, kind: "italic", value: m[11] });
+    } else if (m[12] !== undefined) {
+      tokens.push({ start, end, kind: "code", value: m[12] });
     }
   }
   return tokens;
@@ -120,6 +128,25 @@ function renderInlineRefs(content: string) {
         break;
       case "media":
         out.push(<AssetMedia key={key++} src={t.value} alt={t.alt} />);
+        break;
+      case "math-block":
+        out.push(<MathRender key={key++} tex={t.value} display />);
+        break;
+      case "math-inline":
+        out.push(<MathRender key={key++} tex={t.value} />);
+        break;
+      case "link":
+        out.push(
+          <a
+            key={key++}
+            href={t.alt}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t.value}
+          </a>,
+        );
         break;
     }
     cursor = t.end;
@@ -216,5 +243,37 @@ function BlockRefLink({ blockId }: { blockId: string }) {
         <>(({blockId.slice(0, 6)}…))</>
       )}
     </a>
+  );
+}
+
+function MathRender({ tex, display }: { tex: string; display?: boolean }) {
+  let html = "";
+  try {
+    html = katex.renderToString(tex, {
+      displayMode: !!display,
+      throwOnError: false,
+      output: "html",
+      strict: "ignore",
+    });
+  } catch (e) {
+    return (
+      <code className="math-error" title={String(e)}>
+        {display ? `$$${tex}$$` : `$${tex}$`}
+      </code>
+    );
+  }
+  if (display) {
+    return (
+      <span
+        className="math math-display"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  }
+  return (
+    <span
+      className="math math-inline"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
