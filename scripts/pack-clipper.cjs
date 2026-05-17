@@ -16,6 +16,24 @@ if (!fs.existsSync(src)) {
 fs.mkdirSync(outDir, { recursive: true });
 if (fs.existsSync(outZip)) fs.unlinkSync(outZip);
 
+// 把使用手册（md + docx）复制到扩展目录 docs/ 子目录，确保解压后用户能看到。
+const manualDir = path.join(src, "docs");
+fs.mkdirSync(manualDir, { recursive: true });
+const manuals = [
+  ["docs/web-clipper-使用手册.md", "使用手册.md"],
+  ["docs/web-clipper-使用手册.docx", "使用手册.docx"],
+];
+for (const [rel, dest] of manuals) {
+  const from = path.join(root, rel);
+  const to = path.join(manualDir, dest);
+  if (fs.existsSync(from)) {
+    fs.copyFileSync(from, to);
+    console.log("📘 已捎带手册：", path.relative(root, to));
+  } else {
+    console.warn("⚠️  缺少手册源文件：", rel);
+  }
+}
+
 try {
   if (process.platform === "win32") {
     // PowerShell Compress-Archive

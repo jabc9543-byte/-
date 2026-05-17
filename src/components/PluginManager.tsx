@@ -544,6 +544,37 @@ function PluginDetailModal({
       "2) 「天气：按城市写入」会弹窗让你输入城市拼音。",
       "3) 插件通过 Tauri 原生 HTTP 调用 wttr.in ，不受浏览器 CORS 限制。",
     ],
+    "com.logseqrs.calendar": [
+      "1) 命令「Calendar：打开本月日历」会弹窗，圆点 = 已写 journal，[今天] 高亮。",
+      "2) 在弹窗内输入数字（1~31）跳到那一天；输入 < 上月 / > 下月 / t 回到今天。",
+      "3) 想直接看今天，运行「Calendar：跳到今天」即可。",
+      "4) 在任意块输入 /calendar 也能呼出。",
+    ],
+    "com.logseqrs.quick-add": [
+      "1) 速记：命令「QuickAdd：速记到 Inbox」→ 弹窗输入 → 自动写到 Inbox 页。",
+      "2) 模板：命令「QuickAdd：新建论文笔记」→ 输入标题 → 自动写出固定结构。",
+      "3) 追加：命令「QuickAdd：追加到面试题库」→ 题干 + 答案 → 追加到「面试题库」页。",
+      "4) 也可用斜杠：/qa-capture、/qa-paper、/qa-append。",
+    ],
+    "com.logseqrs.templates": [
+      "1) 在图谱里新建一个名为「99-Templates」的页面。",
+      "2) 每个一级块就是一个模板：第一行写模板名，子块写内容；变量可用 {{date}} {{time}} {{title}}。",
+      "3) 在任意块输入 /insert-template 或运行命令「Insert template」，会按编号选择模板。",
+      "4) 选好后变量会自动替换为今日日期 / 时间 / 你输入的标题。",
+    ],
+    "com.logseqrs.claudian": [
+      "1) 先新建一个名为「00-Claudian-Config」的页面（用作配置存放处）。",
+      "2) 运行命令「Claudian：配置 API Key」，粘贴 Anthropic Claude API Key、模型、端点。",
+      "3) 在任意块输入 /ai-summary（总结）、/ai-explain（解释概念）、/ai-review（面试复盘）。",
+      "4) Claude 的输出会直接替换/写入当前块。",
+    ],
+    "com.logseqrs.git-sync": [
+      "1) 先新建一个名为「00-Git-Config」的页面。",
+      "2) 运行命令「Git：配置仓库与 Token」，填 owner/repo、分支、可选 PAT。",
+      "3) 运行「Git：复制自动 commit&push 脚本」拿到 PowerShell / bash 脚本，粘贴到本地终端做初始化与自动同步。",
+      "4) 运行「Git：查看最近 commit」查最近 10 条；改乱了可去 GitHub 一键 Revert。",
+      "5) 在任意块输入 /git-status 把最近 5 条 commit 写入笔记。",
+    ],
   };
   const guide = guides[m.id];
 
@@ -703,6 +734,32 @@ function PluginPreviewModal({
       "1) 安装并启用本插件。",
       "2) 运行命令「天气：写入今日天气」即可在今日 journal 追加一行天气。",
       "3) 插件通过 Tauri 原生 HTTP 调用 wttr.in ，不受浏览器 CORS 限制。",
+    ],
+    "com.logseqrs.calendar": [
+      "1) 安装并启用本插件。",
+      "2) 命令「Calendar：打开本月日历」弹窗显示当月圆点 + 今天高亮。",
+      "3) 弹窗内输入数字跳那天，< / > 翻月，t 回到今天。",
+    ],
+    "com.logseqrs.quick-add": [
+      "1) 安装并启用本插件。",
+      "2) /qa-capture 速记到 Inbox；/qa-paper 新建论文笔记；/qa-append 追加到面试题库。",
+      "3) 也可在命令面板直接搜「QuickAdd」选择动作。",
+    ],
+    "com.logseqrs.templates": [
+      "1) 新建一个名为「99-Templates」的页面。",
+      "2) 每个一级块=一个模板，第一行写模板名；变量 {{date}} {{time}} {{title}}。",
+      "3) /insert-template 即可挑选并把模板插入当前块。",
+    ],
+    "com.logseqrs.claudian": [
+      "1) 新建一个名为「00-Claudian-Config」的页面。",
+      "2) 运行「Claudian：配置 API Key」保存 Claude Key/模型/端点。",
+      "3) /ai-summary 总结、/ai-explain 解释、/ai-review 复盘。",
+    ],
+    "com.logseqrs.git-sync": [
+      "1) 新建「00-Git-Config」页面。",
+      "2) 运行「Git：配置仓库与 Token」。",
+      "3) 「Git：复制自动 commit&push 脚本」拿到一键脚本，本地终端跑即可。",
+      "4) 「Git：查看最近 commit」可在沙箱内直接看 GitHub commit 列表。",
     ],
   };
   const guide = guides[m.id];

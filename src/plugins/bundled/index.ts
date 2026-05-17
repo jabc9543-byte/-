@@ -7,6 +7,11 @@ import { WEB_CLIPPER_MAIN_JS } from "./webClipper";
 import { THEMES_MAIN_JS } from "./themes";
 import { OBSIDIAN_PACK } from "./obsidianPack";
 import { INSERT_HELPERS_MAIN_JS } from "./insertHelpers";
+import { CALENDAR_MAIN_JS } from "./calendar";
+import { QUICK_ADD_MAIN_JS } from "./quickAdd";
+import { TEMPLATES_MAIN_JS } from "./templatesCore";
+import { CLAUDIAN_MAIN_JS } from "./claudian";
+import { GIT_MAIN_JS } from "./gitSync";
 
 export interface BundledPlugin {
   manifest: PluginManifest;
@@ -132,6 +137,91 @@ export const BUNDLED_PLUGINS: BundledPlugin[] = [
       tagline: "一键插入公式、链接、图片、代码",
     },
     source: INSERT_HELPERS_MAIN_JS,
+  },
+  {
+    manifest: {
+      id: "com.logseqrs.calendar",
+      name: "Calendar",
+      version: "0.1.0",
+      description:
+        "弹窗显示本月日历，圈点标记写过 journal 的天，一眼看出断更。命令：Calendar：打开本月日历 / Calendar：跳到今天。斜杠：/calendar。输入数字跳到那一天，输入 < / > 翻月，t 回到今天。",
+      author: "全视维 官方",
+      entry: "main.js",
+      permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks"],
+      kind: "native",
+      category: "生产力",
+      icon: "🗓️",
+      tagline: "今天画一个点，不断更一眼看出",
+    },
+    source: CALENDAR_MAIN_JS,
+  },
+  {
+    manifest: {
+      id: "com.logseqrs.quick-add",
+      name: "QuickAdd",
+      version: "0.1.0",
+      description:
+        "三种快速动作：速记到 Inbox、新建论文笔记、追加到面试题库。命令：QuickAdd：速记 / QuickAdd：新建论文笔记 / QuickAdd：追加到面试题库。斜杠：/qa-capture、/qa-paper、/qa-append。",
+      author: "全视维 官方",
+      entry: "main.js",
+      permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks"],
+      kind: "native",
+      category: "生产力",
+      icon: "⚡",
+      tagline: "一键速记 / 模板化新建 / 闪电追加",
+    },
+    source: QUICK_ADD_MAIN_JS,
+  },
+  {
+    manifest: {
+      id: "com.logseqrs.templates",
+      name: "Templates",
+      version: "0.1.0",
+      description:
+        "把反复出现的结构存在「99-Templates」页，随时一键插入。命令：Insert template / Templates：管理模板。斜杠：/insert-template。变量：{{date}} {{time}} {{title}}。",
+      author: "全视维 官方",
+      entry: "main.js",
+      permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks"],
+      kind: "native",
+      category: "生产力",
+      icon: "📄",
+      tagline: "把重复劳动变成一键",
+    },
+    source: TEMPLATES_MAIN_JS,
+  },
+  {
+    manifest: {
+      id: "com.logseqrs.claudian",
+      name: "Claudian",
+      version: "0.1.0",
+      description:
+        "在全视维中直接调用 Claude AI。设置页「00-Claudian-Config」保存 API Key。斜杠：/ai-summary（总结）、/ai-explain（解释概念）、/ai-review（面试复盘）。命令：Claudian：配置 API Key / Claudian：使用步骤。",
+      author: "全视维 官方",
+      entry: "main.js",
+      permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks", "network"],
+      kind: "native",
+      category: "AI",
+      icon: "🤖",
+      tagline: "AI 总结 / 解释 / 复盘，一句 / 搞定",
+    },
+    source: CLAUDIAN_MAIN_JS,
+  },
+  {
+    manifest: {
+      id: "com.logseqrs.git-sync",
+      name: "Git 同步",
+      version: "0.1.0",
+      description:
+        "以 GitHub 仓库为中转站做多设备同步 + 版本恢复。命令：Git：配置仓库与 Token / Git：复制自动 commit&push 脚本 / Git：查看最近 commit / Git：完整使用步骤。斜杠：/git-status。",
+      author: "全视维 官方",
+      entry: "main.js",
+      permissions: ["commands", "slashCommands", "readBlocks", "writeBlocks", "network"],
+      kind: "native",
+      category: "同步与备份",
+      icon: "🔀",
+      tagline: "一键 push 到 GitHub，多设备不丢备份",
+    },
+    source: GIT_MAIN_JS,
   },
   ...OBSIDIAN_PACK,
 ];
